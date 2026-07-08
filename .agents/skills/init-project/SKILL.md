@@ -16,7 +16,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 |---|---|
 | 프로젝트 상태 점검, `AGENTS.md` 생성/보완, 기본 구현 에이전트 확인, 프로젝트 override 여부 확인, 경로·게이트 후보 작성, 진행 정본 준비 상태 판정, `docs/compound/` 최소 초기화, readiness 보고 | 마일스톤 구현, `docs/progress/milestone-status.md` 선생성, 하위 구현 에이전트 호출, 커밋, production dependency 추가, 기존 문서 덮어쓰기, 불명확한 에이전트 override·위험 경로 확정 |
 
-`orchestrate`가 요구하는 작업 봉투의 `목표`, `범위`, `완료 기준`을 채울 정본이 없으면 초기화 완료로 보고하지 않는다. `초기화 보류`로 보고하고 필요한 사용자 결정을 남긴다.
+초기화 상태와 `orchestrate` 실행 가능 상태를 분리해 보고한다. 신규 프로젝트에서 마일스톤 정본이 없는 것은 정상 상태이며, 이 경우 초기화가 완료됐더라도 `orchestrate readiness`만 `준비 필요`로 보고한다.
 
 ## 1. 대상 프로젝트 상태 점검
 
@@ -155,8 +155,8 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 1. `docs/02-roadmap/01-milestones.md`, `docs/02-roadmap/02-work-tickets.md`, `docs/02-roadmap/tickets/`를 읽는다.
 2. 다음에 실행할 마일스톤의 `목표`, `범위`, `완료 기준`을 채울 근거가 있는지 확인한다.
-3. 근거가 충분하면 `orchestrate` 호출 가능으로 보고한다.
-4. 근거가 부족하면 빈 마일스톤을 만들지 않는다. `초기화 보류`로 보고하고 필요한 로드맵·티켓·완료 기준 작성을 요청한다.
+3. 근거가 충분하면 `orchestrate readiness: 즉시 실행 가능`으로 보고한다.
+4. 근거가 부족하면 빈 마일스톤을 만들지 않는다. `orchestrate readiness: 준비 필요`로 보고하고 필요한 로드맵·티켓·완료 기준 작성을 요청한다.
 
 ## 6. compound 초기화
 
@@ -177,20 +177,29 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 ## 7. 최종 readiness 보고
 
-마지막에 `orchestrate` 호출 가능 여부를 판정한다.
+마지막에 초기화 상태와 `orchestrate` 호출 가능 여부를 각각 판정한다.
 
-판정 기준:
+`init readiness` 판정 기준:
 
 - `AGENTS.md`에 oms-codex 운영 섹션이 존재한다.
 - 기본 구현 에이전트 `page-builder`, `data-layer`를 사용할 수 있거나, 프로젝트 override 확인 필요 항목이 명시돼 있다.
 - 동작 레이어 prefix와 위험 클래스 후보가 확정 또는 보류 상태로 기록돼 있다.
 - `docs/progress/milestone-status.md` 존재 여부와 부재 시 첫 마일스톤 착수 때 생성될 수 있음을 기록했다.
+- `docs/compound/` 최소 초기화 여부를 처리했다.
+
+위 기준을 충족하면 `init readiness: 초기화 완료`로 보고한다. 직접 처리할 수 없는 차단 항목 때문에 위 기준을 충족하지 못한 경우에만 `init readiness: 초기화 보류`로 보고한다.
+
+`orchestrate readiness` 판정 기준:
+
 - `orchestrate` 작업 봉투의 `목표`, `범위`, `완료 기준`을 채울 정본이 있다.
+
+정본이 있으면 `orchestrate readiness: 즉시 실행 가능`으로 보고한다. 정본이 없거나 부족하면 `orchestrate readiness: 준비 필요`로 보고하고, 필요한 문서 또는 티켓 작성을 다음 단계로 제안한다.
 
 보고 형식:
 
 ```markdown
-readiness: <orchestrate 가능 | 초기화 보류>
+init readiness: <초기화 완료 | 초기화 보류>
+orchestrate readiness: <즉시 실행 가능 | 준비 필요>
 
 완료 항목:
 - <생성/수정/확인한 항목>
