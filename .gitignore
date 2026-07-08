@@ -1,0 +1,24 @@
+# Local runtime artifacts
+_workspace/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+
+# Dependency and build outputs
+node_modules/
+dist/
+build/
+coverage/
+
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_dsa
+service-account*.json
+credentials*.json
