@@ -1,11 +1,11 @@
 ---
 name: init-project
-description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하는 스킬. 프로젝트를 oms-codex 파이프라인으로 초기화, AGENTS.md 생성/보완, 기본 구현 에이전트 확인, 프로젝트 override 여부 확인, 진행 정본 점검, 동작 레이어 prefix, 위험 클래스 게이트, compound 디렉터리, orchestrate 실행 전 준비가 필요할 때 사용한다. orchestrate 실행 전에 프로젝트별 부트스트랩 상태를 점검·보완한다.
+description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하는 스킬. AGENTS.md 생성/보완, 프로젝트 로컬 하네스 설치 또는 갱신, 기본 하위 에이전트 설치 확인, 프로젝트 유형별 에이전트 라우팅 최적화, 진행 정본 점검, 동작 레이어 prefix, 위험 클래스 게이트, compound 디렉터리, orchestrate 실행 전 준비가 필요할 때 사용한다.
 ---
 
 ## 목적
 
-대상 프로젝트를 oms-codex 파이프라인에 연결할 최소 운영 기준을 만든다.
+대상 프로젝트를 oms-codex 파이프라인에 연결하고, 로컬 하네스를 설치·최적화해 `orchestrate`가 실행 가능한 기반을 만든다.
 마일스톤 구현은 시작하지 않는다. 구현·검증 파이프라인 실행은 `orchestrate`가 담당한다.
 
 이 스킬은 대상 프로젝트 루트에서 실행한다. 플러그인 저장소 안에서 실행 중이면 대상 프로젝트 파일을 추정하지 말고, 사용자가 지정한 대상 프로젝트에서 다시 실행하도록 보고한다.
@@ -14,9 +14,11 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 | 포함 | 제외 |
 |---|---|
-| 프로젝트 상태 점검, `AGENTS.md` 생성/보완, 기본 구현 에이전트 확인, 프로젝트 override 여부 확인, 경로·게이트 후보 작성, 진행 정본 준비 상태 판정, `docs/compound/` 최소 초기화, readiness 보고 | 마일스톤 구현, `docs/progress/milestone-status.md` 선생성, 하위 구현 에이전트 호출, 커밋, production dependency 추가, 기존 문서 덮어쓰기, 불명확한 에이전트 override·위험 경로 확정 |
+| 프로젝트 상태 점검, 프로젝트 로컬 `.codex/agents/`와 `.agents/skills/` 하네스 설치·갱신, 기본 하위 에이전트 설치 확인, 프로젝트 유형별 에이전트 라우팅 최적화, `AGENTS.md` 생성/보완, 프로젝트 override 여부 확인, 경로·게이트 후보 작성, 진행 정본 준비 상태 판정, `docs/compound/` 최소 초기화, 설치 검증, readiness 보고 | 마일스톤 구현 시작, `docs/progress/milestone-status.md` 선생성, 하위 에이전트로 실제 구현·검증 실행, 커밋, production dependency 추가, lockfile·package manager 설정 변경, 기존 문서 덮어쓰기, 불명확한 에이전트 override·위험 경로 확정 |
 
 초기화 상태와 `orchestrate` 실행 가능 상태를 분리해 보고한다. 신규 프로젝트에서 마일스톤 정본이 없는 것은 정상 상태이며, 이 경우 초기화가 완료됐더라도 `orchestrate readiness`만 `준비 필요`로 보고한다.
+
+로컬 하네스 설치·갱신이 필요하면 `references/harness-install.md`를 읽고, 실제 플러그인 번들에 존재하는 agent/skill/source만 대상 프로젝트에 반영한다.
 
 ## 1. 대상 프로젝트 상태 점검
 
@@ -25,6 +27,8 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 필수 확인 항목:
 
 - `AGENTS.md` 존재 여부
+- `.codex/agents/` 존재 여부와 기존 agent TOML
+- `.agents/skills/` 존재 여부와 기존 skill 디렉터리
 - `docs/progress/milestone-status.md` 존재 여부
 - `docs/compound/` 존재 여부
 - `_workspace/` 존재 여부
@@ -34,6 +38,8 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 - 기존 문서 구조: `docs/`, `docs/02-roadmap/`, `docs/02-roadmap/01-milestones.md`, `docs/02-roadmap/02-work-tickets.md`, `docs/progress/`, `docs/history/`, `docs/handoffs/`
 
 확인 결과는 이후 판단의 근거로 사용한다. 없는 경로는 결함으로 단정하지 말고 "근거 부재" 또는 "미초기화"로 분류한다.
+
+현재 경로가 oms-codex 플러그인 저장소 또는 플러그인 캐시 내부이면 중단한다. 예: `.codex-plugin/plugin.json`, `.codex/agents/`, `.agents/skills/init-project/`가 함께 있고 플러그인 자체를 수정 중인 구조. 이때는 대상 프로젝트 경로를 요청하고 프로젝트 파일을 추정하지 않는다.
 
 ## 2. 프로젝트 유형 판정
 
@@ -46,11 +52,27 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 | 프론트 중심 | UI 페이지·컴포넌트·라우팅 문서가 주된 산출물이고 API/DB 변경이 없거나 부차적 |
 | 백엔드/API 중심 | API handler, service, repository, DB schema, migration, 테스트가 주된 산출물 |
 | 풀스택 | UI와 API/DB 산출물이 같은 마일스톤 범위에 함께 존재 |
-| 문서/계획만 있는 초기 상태 | 코드 산출물보다 로드맵·요구사항·계획 문서만 존재 |
+| 문서/계획 중심 | 코드 산출물보다 로드맵·요구사항·계획 문서만 존재 |
 
-판정은 `orchestrate`가 기본 구현 에이전트를 투입할지 판단하기 위한 정보다. 판정만으로 구현을 시작하지 않는다.
+판정은 하네스 설치 후 에이전트 라우팅을 최적화하기 위한 정보다. 판정만으로 구현을 시작하지 않는다.
 
-## 3. AGENTS.md 생성 또는 보완
+## 3. 로컬 하네스 설치 또는 갱신
+
+`references/harness-install.md`를 읽고 설치 대상, 상태 판정, 충돌 처리, 프로젝트 유형별 라우팅을 적용한다.
+
+핵심 원칙:
+
+- 대상 프로젝트 루트의 `.codex/agents/`와 필요한 `.agents/skills/`에만 설치한다.
+- 원본은 현재 oms-codex 플러그인 번들의 실제 파일만 사용한다.
+- 원본이 없으면 파일을 창작하지 않고 `원본 부재`로 보고한다.
+- 기존 대상 파일이 있으면 먼저 읽고 비교한다.
+- 원본과 다르고 사용자 변경 가능성이 있으면 임의 overwrite하지 않는다.
+- 불명확한 충돌은 `확인 필요` 또는 `충돌 보류`로 기록한다.
+- production dependency, lockfile, package manager 설정은 변경하지 않는다.
+
+설치 결과는 `설치됨`, `갱신됨`, `원본 부재`, `확인 필요`, `충돌 보류` 중 하나로 에이전트·스킬별로 기록한다. 프로젝트별 최적화는 기본적으로 agent TOML을 임의 수정하지 않고 `AGENTS.md`의 라우팅 정책으로 기록한다. 프로젝트가 이미 override agent를 갖고 있으면 보존하고 상태를 별도 기록한다.
+
+## 4. AGENTS.md 생성 또는 보완
 
 `AGENTS.md`가 없으면 새로 만든다. 있으면 기존 내용을 보존하고 `## oms-codex 운영` 섹션만 추가하거나 갱신한다.
 
@@ -69,8 +91,43 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 | 구현 영역 | 기본 에이전트 | 상태 |
 |---|---|---|
-| 프론트 구현 | page-builder | 기본 |
-| 백엔드/API/데이터 구현 | data-layer | 기본 |
+| 프론트 구현 | page-builder | <설치됨/원본 부재/확인 필요/충돌 보류> |
+| 백엔드/API/데이터 구현 | data-layer | <설치됨/원본 부재/확인 필요/충돌 보류> |
+
+### 설치된 하네스
+
+| 항목 | 경로 | 상태 |
+|---|---|---|
+| page-builder | `.codex/agents/page-builder.toml` | <상태> |
+| data-layer | `.codex/agents/data-layer.toml` | <상태> |
+| evaluator | `.codex/agents/evaluator.toml` | <상태> |
+| qa-guard | `.codex/agents/qa-guard.toml` | <상태> |
+| milestone-tracker | `.codex/agents/milestone-tracker.toml` | <상태> |
+| plan-auditor | `.codex/agents/plan-auditor.toml` | <상태> |
+| compound-learner | `.codex/agents/compound-learner.toml` | <상태> |
+
+### 에이전트 라우팅
+
+| 작업 유형 | 우선 에이전트 | 게이트 후보 |
+|---|---|---|
+| 프론트 구현 | page-builder | design-reviewer, qa-guard |
+| 백엔드/API/데이터 구현 | data-layer | tdd-agent, security-auditor, qa-guard |
+| 요구사항 검증 | evaluator | qa-guard, design-reviewer, security-auditor |
+| 계획·진행 관리 | plan-auditor, milestone-tracker | compound-learner |
+
+### 프로젝트 최적화
+
+- 판정 유형: <유형 또는 판정 보류>
+- 판정 근거: <실제 확인한 파일/경로>
+- 적용 라우팅: <실제 설치된 에이전트 기준>
+- override 상태: <없음/확인 필요/프로젝트 로컬 override 사용>
+
+### 설치 검증
+
+- `.codex/agents/` 필수 에이전트 상태: <요약>
+- `.agents/skills/` 필수 스킬 상태: <요약>
+- 선택 에이전트와 스킬 상태: <요약>
+- 충돌/확인 필요: <없음 또는 목록>
 
 ### 경로와 게이트
 
@@ -88,7 +145,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 프로젝트가 별도 구현 에이전트를 정의했다면 이 표에 override로 기록한다. 모호하면 기본값을 유지하고 `확인 필요`에 남긴다. 레거시 분석은 기본 하네스에 포함하지 않으므로, 포팅 프로젝트에서 원본 분석이 필요하면 별도 분석 방법을 사용자 확인 항목으로 남긴다.
 
-## 4. 경로와 게이트 설정
+## 5. 경로와 게이트 설정
 
 프로젝트 구조에서 후보를 작성한다. 모호한 후보는 확정하지 않는다.
 
@@ -145,7 +202,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 - 요구사항 검증 보고서: `_workspace/eval_*.md`
 - 반복 학습: `docs/compound/{카테고리}/`
 
-## 5. 진행 정본 점검
+## 6. 진행 정본 점검
 
 `docs/progress/milestone-status.md`가 있으면 덮어쓰지 않는다. 형식이 `milestone-track`의 2계층 구조와 크게 다르면 보완 필요로 보고한다.
 
@@ -158,7 +215,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 3. 근거가 충분하면 `orchestrate readiness: 즉시 실행 가능`으로 보고한다.
 4. 근거가 부족하면 빈 마일스톤을 만들지 않는다. `orchestrate readiness: 준비 필요`로 보고하고 필요한 로드맵·티켓·완료 기준 작성을 요청한다.
 
-## 6. compound 초기화
+## 7. compound 초기화
 
 `docs/compound/`가 없으면 생성할 수 있다. 단, 빈 카테고리 파일을 과도하게 만들지 않는다.
 
@@ -175,14 +232,18 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 부재를 허용할 수 있으면 생성하지 않고 "첫 학습 시 compound-learner가 생성"으로 보고한다.
 
-## 7. 최종 readiness 보고
+## 8. 최종 readiness 보고
 
 마지막에 초기화 상태와 `orchestrate` 호출 가능 여부를 각각 판정한다.
 
 `init readiness` 판정 기준:
 
 - `AGENTS.md`에 oms-codex 운영 섹션이 존재한다.
+- `.codex/agents/`와 필요한 `.agents/skills/` 하네스 설치 또는 설치 불가 사유가 기록돼 있다.
+- 필수 하위 에이전트 `page-builder`, `data-layer`, `evaluator`, `qa-guard`, `milestone-tracker`, `plan-auditor`, `compound-learner`의 설치 상태가 기록돼 있다.
 - 기본 구현 에이전트 `page-builder`, `data-layer`를 사용할 수 있거나, 프로젝트 override 확인 필요 항목이 명시돼 있다.
+- 프로젝트 유형별 에이전트 라우팅과 최적화 결과가 기록돼 있다.
+- 설치 검증 결과가 기록돼 있다.
 - 동작 레이어 prefix와 위험 클래스 후보가 확정 또는 보류 상태로 기록돼 있다.
 - `docs/progress/milestone-status.md` 존재 여부와 부재 시 첫 마일스톤 착수 때 생성될 수 있음을 기록했다.
 - `docs/compound/` 최소 초기화 여부를 처리했다.
@@ -201,23 +262,35 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 init readiness: <초기화 완료 | 초기화 보류>
 orchestrate readiness: <즉시 실행 가능 | 준비 필요>
 
-완료 항목:
-- <생성/수정/확인한 항목>
+설치된 하네스:
+- <에이전트/스킬 파일과 상태>
 
-미완료 항목:
-- <없음 또는 보류 항목>
+설치 보류/실패 항목:
+- <없음 또는 원본 부재/확인 필요/충돌 보류>
 
-확인 필요:
-- <사용자가 결정해야 하는 기본 에이전트 override/경로/마일스톤>
+프로젝트 유형 판정:
+- <유형과 근거>
+
+적용된 에이전트 라우팅:
+- <우선 에이전트와 게이트 후보>
 
 생성/수정한 파일:
 - <없음 또는 파일 목록>
 
+확인 필요:
+- <사용자가 결정해야 하는 기본 에이전트 override/경로/마일스톤>
+
 다음 단계:
 - <권장 orchestrate 호출 또는 먼저 작성할 문서>
 
-검증:
-- <frontmatter/문서/경로 확인 결과>
+검증 결과:
+- `.codex/agents/` 설치 파일 목록 확인: <결과>
+- 필수 하위 에이전트별 설치 상태 확인: <결과>
+- `AGENTS.md` oms-codex 운영 섹션 diff 확인: <결과>
+- `docs/progress/milestone-status.md` 선생성 없음: <결과>
+- production dependency 추가 없음: <결과>
+- lockfile/package manager 설정 변경 없음: <결과>
+- 커밋 없음: <결과>
 ```
 
 `orchestrate` 호출 예시는 정본이 준비된 경우에만 제안한다.
@@ -232,8 +305,11 @@ $oms-codex:orchestrate M{N} <목표 또는 티켓>
 
 작업 종료 전에 아래를 확인한다.
 
+- `.codex/agents/`와 `.agents/skills/`에 설치된 파일 목록을 확인한다.
+- 필수 하위 에이전트별 설치 상태를 확인한다.
 - 변경한 `AGENTS.md` 섹션만 diff로 검토한다.
 - `docs/progress/milestone-status.md`를 생성·수정하지 않았음을 확인한다.
 - `docs/compound/`를 만들었다면 빈 카테고리 파일을 과도하게 만들지 않았는지 확인한다.
 - 새 production dependency가 추가되지 않았는지 확인한다.
+- lockfile이나 package manager 설정이 바뀌지 않았는지 확인한다.
 - 커밋하지 않았음을 보고한다.
