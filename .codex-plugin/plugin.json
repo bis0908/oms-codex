@@ -1,6 +1,6 @@
 {
   "name": "oms-codex",
-  "version": "0.1.0+codex.20260708161525",
+  "version": "1.0.8",
   "description": "Codex\uc6a9 \uc5d0\uc774\uc804\ud2b8 \ud300 \ud558\ub124\uc2a4",
   "skills": "./.agents/skills/"
 }
