@@ -2,35 +2,47 @@
 set -euo pipefail
 
 symlink=0
-skip_marketplace=0
+force=0
+target=""
 
 usage() {
   cat <<'USAGE'
-사용법: ./install.sh [--symlink] [--skip-marketplace]
+사용법: ./install.sh --target <프로젝트 경로> [--symlink] [--force]
 USAGE
 }
 
-for arg in "$@"; do
-  case "$arg" in
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target)
+      [[ $# -ge 2 ]] || { echo "--target 값이 필요합니다." >&2; exit 1; }
+      target="$2"
+      shift 2
+      ;;
     --symlink)
       symlink=1
+      shift
       ;;
-    --skip-marketplace)
-      skip_marketplace=1
+    --force)
+      force=1
+      shift
       ;;
     -h|--help)
       usage
       exit 0
       ;;
     *)
-      echo "알 수 없는 옵션: $arg" >&2
+      echo "알 수 없는 옵션: $1" >&2
       usage >&2
       exit 1
       ;;
   esac
 done
 
+[[ -n "$target" ]] || { echo "--target은 필수입니다." >&2; usage >&2; exit 1; }
+[[ -d "$target" ]] || { echo "대상 프로젝트 디렉터리가 없습니다: $target" >&2; exit 1; }
+
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+target="$(cd "$target" && pwd)"
 
 kst_timestamp() {
   TZ=Asia/Seoul date +"%Y%m%d-%H%M%S"
@@ -48,50 +60,40 @@ require_path() {
   printf '%s\n' "$path"
 }
 
-backup_existing_path() {
-  local path="$1"
-
-  if [[ ! -e "$path" && ! -L "$path" ]]; then
-    return
-  fi
-
-  local backup_path="$path.bak.$(kst_timestamp)"
+get_unique_path() {
+  local base_path="$1"
+  local candidate="$base_path"
   local counter=1
-  while [[ -e "$backup_path" || -L "$backup_path" ]]; do
-    backup_path="$path.bak.$(kst_timestamp).$counter"
+
+  while [[ -e "$candidate" || -L "$candidate" ]]; do
+    candidate="$base_path.$counter"
     counter=$((counter + 1))
   done
 
+  printf '%s\n' "$candidate"
+}
+
+backup_existing_path() {
+  local path="$1"
+  local backup_path
+
+  backup_path="$(get_unique_path "$path.bak.$(kst_timestamp)")"
   mv "$path" "$backup_path"
-  echo "기존 파일을 백업했습니다: $backup_path" >&2
+  echo "기존 경로를 백업했습니다: $backup_path" >&2
   printf '%s\n' "$backup_path"
 }
 
-new_temp_path() {
-  local destination="$1"
-  local temp_path="$destination.tmp.$$.$(kst_timestamp)"
-  local counter=1
-
-  while [[ -e "$temp_path" || -L "$temp_path" ]]; do
-    temp_path="$destination.tmp.$$.$(kst_timestamp).$counter"
-    counter=$((counter + 1))
-  done
-
-  printf '%s\n' "$temp_path"
-}
-
-install_agent_file() {
+install_project_item() {
   local source="$1"
   local destination="$2"
-  local temp_path
-  local backup_path=""
+  local kind="$3"
+  local temp_path backup_path=""
 
-  temp_path="$(new_temp_path "$destination")"
-
+  temp_path="$(get_unique_path "$destination.tmp.$$.${RANDOM}.$(kst_timestamp)")"
   if [[ "$symlink" -eq 1 ]]; then
     ln -s "$source" "$temp_path"
   else
-    cp "$source" "$temp_path"
+    cp -R "$source" "$temp_path"
   fi
 
   if [[ -e "$destination" || -L "$destination" ]]; then
@@ -99,7 +101,7 @@ install_agent_file() {
   fi
 
   if ! mv "$temp_path" "$destination"; then
-    rm -f "$temp_path"
+    rm -rf "$temp_path"
     if [[ -n "$backup_path" && ! -e "$destination" && ! -L "$destination" && ( -e "$backup_path" || -L "$backup_path" ) ]]; then
       mv "$backup_path" "$destination"
     fi
@@ -107,64 +109,54 @@ install_agent_file() {
   fi
 
   if [[ "$symlink" -eq 1 ]]; then
-    echo "custom agent symlink를 설치했습니다: $destination"
+    echo "$kind symlink 설치 완료: $destination"
   else
-    echo "custom agent 파일을 복사했습니다: $destination"
+    echo "$kind 복사 설치 완료: $destination"
   fi
 }
 
-plugin_json="$(require_path ".codex-plugin/plugin.json")"
-marketplace_json="$(require_path ".agents/plugins/marketplace.json")"
-skills_root="$(require_path ".agents/skills")"
-source_agents="$(require_path ".codex/agents")"
-
-if command -v python >/dev/null 2>&1; then
-  python_cmd="python"
-elif command -v python3 >/dev/null 2>&1; then
-  python_cmd="python3"
-else
-  echo "python 또는 python3 명령을 찾지 못했습니다." >&2
-  exit 2
-fi
-
-"$python_cmd" -m json.tool "$plugin_json" >/dev/null
-"$python_cmd" -m json.tool "$marketplace_json" >/dev/null
-
-if [[ "$skip_marketplace" -eq 0 ]]; then
-  if command -v codex >/dev/null 2>&1; then
-    if ! codex plugin marketplace add "$repo"; then
-      echo "codex marketplace 등록 실패: codex plugin marketplace add \"$repo\"" >&2
-      exit 1
-    fi
-  else
-    echo "codex CLI를 찾을 수 없어 marketplace 등록을 건너뜁니다."
-    echo "수동 실행: codex plugin marketplace add \"$repo\""
-  fi
-else
-  echo "marketplace 등록을 건너뛰었습니다. skill을 사용하려면 나중에 codex plugin marketplace add \"$repo\"를 실행하세요."
-fi
-
-if [[ -z "${HOME:-}" ]]; then
-  echo "HOME 환경 변수가 설정되어 있지 않습니다." >&2
-  exit 1
-fi
-
-target_agents="$HOME/.codex/agents"
-mkdir -p "$target_agents"
+skills_root="$(require_path '.agents/skills')"
+source_agents="$(require_path '.codex/agents')"
+version_file="$(require_path 'VERSION')"
+version="$(tr -d '\r\n' < "$version_file")"
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "VERSION 형식이 올바르지 않습니다: $version" >&2; exit 1; }
+target_agents="$target/.codex/agents"
+target_skills="$target/.agents/skills"
 
 shopt -s nullglob
 agent_files=("$source_agents"/*.toml)
+skill_directories=("$skills_root"/*/)
+shopt -u nullglob
 
-if [[ "${#agent_files[@]}" -eq 0 ]]; then
-  echo "설치할 custom agent TOML 파일이 없습니다: $source_agents"
-  exit 0
-fi
+[[ "${#agent_files[@]}" -gt 0 ]] || { echo "설치할 custom agent TOML 파일이 없습니다: $source_agents" >&2; exit 1; }
+[[ "${#skill_directories[@]}" -gt 0 ]] || { echo "설치할 skill 디렉터리가 없습니다: $skills_root" >&2; exit 1; }
 
+conflicts=()
 for agent_file in "${agent_files[@]}"; do
-  target_path="$target_agents/$(basename "$agent_file")"
-  install_agent_file "$agent_file" "$target_path"
+  destination="$target_agents/$(basename "$agent_file")"
+  [[ -e "$destination" || -L "$destination" ]] && conflicts+=("$destination")
+done
+for skill_directory in "${skill_directories[@]}"; do
+  skill_name="$(basename "$skill_directory")"
+  destination="$target_skills/$skill_name"
+  [[ -e "$destination" || -L "$destination" ]] && conflicts+=("$destination")
 done
 
-echo "OMS Codex 설치가 완료되었습니다."
-echo "Codex를 재시작한 뒤 Plugins 화면에서 OMS Codex를 확인하세요."
+if [[ "${#conflicts[@]}" -gt 0 && "$force" -eq 0 ]]; then
+  echo "기존 프로젝트 설정을 덮어쓰지 않습니다. --force로 백업 후 교체할 수 있습니다:" >&2
+  printf '%s\n' "${conflicts[@]}" >&2
+  exit 1
+fi
+
+mkdir -p "$target_agents" "$target_skills"
+for agent_file in "${agent_files[@]}"; do
+  install_project_item "$agent_file" "$target_agents/$(basename "$agent_file")" "custom agent"
+done
+for skill_directory in "${skill_directories[@]}"; do
+  skill_name="$(basename "$skill_directory")"
+  install_project_item "$skill_directory" "$target_skills/$skill_name" "skill"
+done
+
+echo "OMS Codex $version 프로젝트 로컬 설치가 완료되었습니다: $target"
+echo "기본 복사 설치 파일은 대상 프로젝트에서 직접 커스터마이즈할 수 있습니다."
 echo '시작 예시: $orchestrate <작업>'

@@ -70,6 +70,15 @@ function Require-Path {
     }
 }
 
+function Forbid-Path {
+    param([string]$RelativePath)
+
+    $path = Join-RootPath $RelativePath
+    if (Test-Path -LiteralPath $path) {
+        Add-ErrorMessage "폐기 경로가 남아 있습니다: $RelativePath"
+    }
+}
+
 function Get-RequiredText {
     param([string]$RelativePath)
 
@@ -118,53 +127,21 @@ function Get-PythonCommand {
 @(
     "AGENTS.md",
     "README.md",
+    "VERSION",
     "install.ps1",
     "install.sh",
-    ".codex-plugin\plugin.json",
-    ".agents\plugins\marketplace.json",
     ".agents\skills\init-project\references\agent-profiles.json",
     ".agents\skills\init-project\references\apply-agent-profile.py",
     ".agents\skills",
     ".codex\agents"
 ) | ForEach-Object { Require-Path $_ }
 
-$pluginPath = Join-RootPath ".codex-plugin\plugin.json"
-if (Test-Path -LiteralPath $pluginPath -PathType Leaf) {
-    try {
-        $plugin = Get-Content -LiteralPath $pluginPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($plugin.name -ne "oms-codex") {
-            Add-ErrorMessage "plugin.json name 불일치: $($plugin.name)"
-        }
-        if ($plugin.skills -ne "./.agents/skills/") {
-            Add-ErrorMessage "plugin.json skills 불일치: $($plugin.skills)"
-        }
-    }
-    catch {
-        Add-ErrorMessage "plugin.json JSON 파싱 실패: $($_.Exception.Message)"
-    }
-}
+Forbid-Path ".codex-plugin"
+Forbid-Path ".agents\plugins"
 
-$marketplacePath = Join-RootPath ".agents\plugins\marketplace.json"
-if (Test-Path -LiteralPath $marketplacePath -PathType Leaf) {
-    try {
-        $marketplace = Get-Content -LiteralPath $marketplacePath -Raw -Encoding UTF8 | ConvertFrom-Json
-        $entry = @($marketplace.plugins) | Where-Object { $_.name -eq "oms-codex" } | Select-Object -First 1
-
-        if (-not $entry) {
-            Add-ErrorMessage "marketplace.json oms-codex entry 없음"
-        }
-        else {
-            if ($entry.source.source -ne "local") {
-                Add-ErrorMessage "marketplace.json source.source 불일치: $($entry.source.source)"
-            }
-            if ($entry.source.path -ne "./") {
-                Add-ErrorMessage "marketplace.json source.path 불일치: $($entry.source.path)"
-            }
-        }
-    }
-    catch {
-        Add-ErrorMessage "marketplace.json JSON 파싱 실패: $($_.Exception.Message)"
-    }
+$version = Get-RequiredText "VERSION"
+if ($null -ne $version -and $version.Trim() -ne "1.1.2") {
+    Add-ErrorMessage "VERSION 불일치: $($version.Trim())"
 }
 
 $agentsPath = Join-RootPath ".codex\agents"
@@ -283,12 +260,23 @@ else {
     elseif ($forbiddenTargetExit -gt 1) {
         Add-ErrorMessage "installer 금지 대상 검사 실패: $forbiddenTargetOutput"
     }
+
+    $marketplacePattern = 'codex plugin marketplace|SkipMarketplace|skip_marketplace'
+    $marketplaceOutput = & rg $marketplacePattern (Join-RootPath "install.ps1") (Join-RootPath "install.sh") 2>&1
+    $marketplaceExit = $LASTEXITCODE
+    if ($marketplaceExit -eq 0) {
+        Add-ErrorMessage "installer marketplace 참조 잔존:`n$marketplaceOutput"
+    }
+    elseif ($marketplaceExit -gt 1) {
+        Add-ErrorMessage "installer marketplace 검사 실패: $marketplaceOutput"
+    }
 }
 
-Require-Text "README.md" 'install\.ps1 -Symlink' "README install.ps1 -Symlink"
-Require-Text "README.md" 'install\.sh --symlink' "README install.sh --symlink"
-Require-Text "install.ps1" 'codex plugin marketplace add' "install.ps1 marketplace"
-Require-Text "install.sh" 'codex plugin marketplace add' "install.sh marketplace"
+Require-Text "README.md" 'install\.ps1 -Target' "README install.ps1 target"
+Require-Text "README.md" 'install\.sh --target' "README install.sh target"
+Require-Text "README.md" 'OMS Codex 1\.1\.2' "README version"
+Require-Text "install.ps1" '\[string\]\$Target' "install.ps1 target parameter"
+Require-Text "install.sh" -- '--target\)' "install.sh target parameter"
 
 if ($errors.Count -gt 0) {
     foreach ($errorMessage in $errors) {

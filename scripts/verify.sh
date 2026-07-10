@@ -29,7 +29,7 @@ require_text() {
     return
   fi
 
-  if ! grep -Eq "$pattern" "$path"; then
+  if ! grep -Eq -- "$pattern" "$path"; then
     add_error "$label 텍스트 없음: $relative"
   fi
 }
@@ -37,15 +37,23 @@ require_text() {
 for path in \
   "$ROOT/AGENTS.md" \
   "$ROOT/README.md" \
+  "$ROOT/VERSION" \
   "$ROOT/install.ps1" \
   "$ROOT/install.sh" \
-  "$ROOT/.codex-plugin/plugin.json" \
-  "$ROOT/.agents/plugins/marketplace.json" \
   "$ROOT/.agents/skills/init-project/references/agent-profiles.json" \
   "$ROOT/.agents/skills/init-project/references/apply-agent-profile.py" \
   "$ROOT/.agents/skills" \
   "$ROOT/.codex/agents"; do
   require_path "$path"
+done
+
+version="$(tr -d '\r\n' < "$ROOT/VERSION")"
+[ "$version" = "1.1.2" ] || add_error "VERSION 불일치: $version"
+
+for path in "$ROOT/.codex-plugin" "$ROOT/.agents/plugins"; do
+  if [ -e "$path" ]; then
+    add_error "폐기 경로가 남아 있습니다: ${path#$ROOT/}"
+  fi
 done
 
 if command -v python >/dev/null 2>&1; then
@@ -57,9 +65,6 @@ else
   exit 2
 fi
 
-"$python_cmd" -m json.tool "$ROOT/.codex-plugin/plugin.json" >/dev/null 2>&1 || add_error "plugin.json JSON 파싱 실패"
-"$python_cmd" -m json.tool "$ROOT/.agents/plugins/marketplace.json" >/dev/null 2>&1 || add_error "marketplace.json JSON 파싱 실패"
-
 set +e
 json_field_errors="$(
   "$python_cmd" - "$ROOT" <<'PY' 2>&1
@@ -70,40 +75,6 @@ import sys
 root = pathlib.Path(sys.argv[1])
 errors = []
 profile_data = {}
-
-try:
-    plugin = json.loads((root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
-    if plugin.get("name") != "oms-codex":
-        errors.append(f"plugin.json name 불일치: {plugin.get('name')}")
-    if plugin.get("skills") != "./.agents/skills/":
-        errors.append(f"plugin.json skills 불일치: {plugin.get('skills')}")
-except Exception as exc:
-    errors.append(f"plugin.json 필드 검사 실패: {exc}")
-
-try:
-    marketplace = json.loads((root / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
-    plugins = marketplace.get("plugins", [])
-    entry = next(
-        (
-            item
-            for item in plugins
-            if isinstance(item, dict) and item.get("name") == "oms-codex"
-        ),
-        None,
-    )
-
-    if entry is None:
-        errors.append("marketplace.json oms-codex entry 없음")
-    else:
-        source = entry.get("source", {})
-        if not isinstance(source, dict):
-            source = {}
-        if source.get("source") != "local":
-            errors.append(f"marketplace.json source.source 불일치: {source.get('source')}")
-        if source.get("path") != "./":
-            errors.append(f"marketplace.json source.path 불일치: {source.get('path')}")
-except Exception as exc:
-    errors.append(f"marketplace.json 필드 검사 실패: {exc}")
 
 try:
     profile_data = json.loads(
@@ -258,10 +229,26 @@ elif [ "$forbidden_status" -gt 1 ]; then
   add_error "installer 금지 대상 검사 실패: $forbidden_output"
 fi
 
-require_text "$ROOT/README.md" 'install\.ps1 -Symlink' "README install.ps1 -Symlink"
-require_text "$ROOT/README.md" 'install\.sh --symlink' "README install.sh --symlink"
-require_text "$ROOT/install.ps1" 'codex plugin marketplace add' "install.ps1 marketplace"
-require_text "$ROOT/install.sh" 'codex plugin marketplace add' "install.sh marketplace"
+require_text "$ROOT/README.md" 'install\.ps1 -Target' "README install.ps1 target"
+require_text "$ROOT/README.md" 'install\.sh --target' "README install.sh target"
+require_text "$ROOT/README.md" 'OMS Codex 1\.1\.2' "README version"
+require_text "$ROOT/install.ps1" '\[string\]\$Target' "install.ps1 target parameter"
+require_text "$ROOT/install.sh" '--target\)' "install.sh target parameter"
+
+set +e
+if command -v rg >/dev/null 2>&1; then
+  marketplace_output="$(rg 'codex plugin marketplace|SkipMarketplace|skip_marketplace' "$ROOT/install.ps1" "$ROOT/install.sh" 2>&1)"
+else
+  marketplace_output="$(grep -nE 'codex plugin marketplace|SkipMarketplace|skip_marketplace' "$ROOT/install.ps1" "$ROOT/install.sh" 2>&1)"
+fi
+marketplace_status=$?
+set -e
+if [ "$marketplace_status" -eq 0 ]; then
+  add_error "installer marketplace 참조 잔존:
+$marketplace_output"
+elif [ "$marketplace_status" -gt 1 ]; then
+  add_error "installer marketplace 검사 실패: $marketplace_output"
+fi
 
 if [ "${#errors[@]}" -gt 0 ]; then
   printf '%s\n' "${errors[@]}" >&2
