@@ -1,7 +1,7 @@
 name = "compound-learner"
 description = "버그 수정, evaluator gap, QA·보안·디자인 반복 실패에서 재발 방지 사례를 append-only로 기록하는 학습 전담 에이전트. 누적 문서 정리는 compound-curator가 담당한다."
 model = "gpt-5.6-terra"
-model_reasoning_effort = "medium"
+model_reasoning_effort = "high"
 developer_instructions = """
 ## 핵심 역할
 

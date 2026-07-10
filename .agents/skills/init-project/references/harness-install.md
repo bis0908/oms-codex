@@ -8,6 +8,7 @@
 - 원본 skill: 현재 oms-codex 플러그인 번들의 `.agents/skills/<skill>/`
 - 대상 agent: 대상 프로젝트의 `.codex/agents/*.toml`
 - 대상 skill: 대상 프로젝트의 `.agents/skills/<skill>/`
+- 실행 프로필 정본: 현재 플러그인 번들의 `.agents/skills/init-project/references/agent-profiles.json`
 
 현재 경로가 oms-codex 플러그인 저장소 또는 플러그인 캐시 내부이면 설치하지 않는다. 대상 프로젝트 경로를 요청한다.
 
@@ -58,9 +59,11 @@
 
 기존 대상 파일이나 디렉터리가 있으면 먼저 읽고 비교한다. 내용이 다르면 임의 overwrite하지 않는다. TOML과 skill 디렉터리는 구조가 민감하므로 자동 병합은 관리 흔적과 무변경 근거가 명확할 때만 허용한다.
 
+단, target agent TOML이 source와 `model`, `model_reasoning_effort`만 다르고 나머지 내용이 동일하면 이전 실행 프로필이 적용된 관리본으로 본다. 이 경우에는 파일 전체를 복사하지 않고 `apply-agent-profile.py`로 두 필드만 변경할 수 있다. 두 필드 외 차이가 하나라도 있으면 사용자 변경 가능성이 있으므로 `확인 필요` 또는 `충돌 보류`로 처리한다.
+
 ## 프로젝트별 최적화
 
-최적화는 기본적으로 agent TOML을 수정하지 않고 `AGENTS.md`의 `## oms-codex 운영` 섹션에 라우팅 정책으로 기록한다.
+최적화는 기본적으로 agent TOML을 수정하지 않고 `AGENTS.md`의 `## oms-codex 운영` 섹션에 라우팅 정책으로 기록한다. 예외는 사용자가 명시적으로 선택한 실행 프로필이며, 이 경우 `apply-agent-profile.py`가 model·effort 두 필드만 변경한다.
 
 | 프로젝트 유형 | 우선 라우팅 | 게이트 후보 |
 |---|---|---|
@@ -80,6 +83,7 @@
 기록 필수 항목:
 
 - 필수 agent별 설치 상태
+- 실행 프로필 ID, 선택 근거, 대상 agent TOML 일치 검증 결과
 - 필수 skill별 설치 상태
 - 선택 agent/skill 설치 또는 제외 사유
 - 프로젝트 유형 판정과 근거 경로

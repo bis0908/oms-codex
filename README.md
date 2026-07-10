@@ -65,7 +65,7 @@ codex plugin marketplace list
 
 수동 검증 시에는 `.codex-plugin/plugin.json`과 `.agents/plugins/marketplace.json`을 JSON으로 파싱하고, `install.ps1` 및 `install.sh`의 구문 검사를 실행한다. 설치 후에는 `codex plugin marketplace list`에서 `oms-codex-local` marketplace가 보이는지 확인한다.
 
-검증 스크립트는 agent별 model/effort, 공통 반환 계약, phase/발신자 상태 전이, security 학습 트리거와 필수 게이트 정책도 확인한다.
+검증 스크립트는 세 실행 프로필의 agent별 model/effort, 기본 `performance` agent TOML, 공통 반환 계약, phase/발신자 상태 전이, security 학습 트리거와 필수 게이트 정책도 확인한다.
 
 ## 사용
 
@@ -77,7 +77,15 @@ Codex에서 marketplace를 갱신한 뒤 OMS Codex 플러그인을 설치한다.
 $orchestrate <작업>
 ```
 
-프로젝트 초기화 시 보안 path/keyword manifest, 시각 전용 manifest, 일반 구현 역할 override, 커밋 정책을 `AGENTS.md`에 기록한다. 커밋 정책이 없으면 `ask`로 처리하며, 필수 구현·검증 agent가 재실패하면 완료 경로를 중단한다.
+프로젝트 초기화 시 보안 path/keyword manifest, 시각 전용 manifest, 일반 구현 역할 override, 커밋 정책, 실행 프로필을 `AGENTS.md`에 기록한다. 최초 초기화에서는 다음 실행 프로필 중 하나를 사용자에게 선택받고, 프로젝트 로컬 `.codex/agents`에만 반영한다.
+
+| profile ID | 목적 |
+|---|---|
+| `performance` | 직접 구현·전문 검수에 Sol을 선택적으로 배정한다. |
+| `economy` | `data-layer`, `evaluator`, `security-auditor`만 Sol을 유지하고 `page-builder`는 Terra/xhigh를 사용한다. |
+| `low-cost` | 필수 역할은 Terra/xhigh, 단순 상태·세션 작업은 Luna/medium을 사용한다. |
+
+선택하지 않으면 초기화는 `needs-input`으로 종료하며, 기존 프로필은 사용자가 명시적으로 바꾸기 전까지 유지한다. 커밋 정책이 없으면 `ask`로 처리하며, 필수 구현·검증 agent가 재실패하면 완료 경로를 중단한다.
 
 ## 범위
 

@@ -14,7 +14,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 | 포함 | 제외 |
 |---|---|
-| 프로젝트 상태 점검, 프로젝트 로컬 `.codex/agents/`와 `.agents/skills/` 하네스 설치·갱신, 기본 하위 에이전트 설치 확인, 프로젝트 유형별 에이전트 라우팅 최적화, `AGENTS.md` 생성/보완, 프로젝트 override 여부 확인, 경로·게이트 후보 작성, 진행 정본 준비 상태 판정, `docs/compound/` 최소 초기화, 설치 검증, readiness 보고 | 마일스톤 구현 시작, `docs/progress/milestone-status.md` 선생성, 하위 에이전트로 실제 구현·검증 실행, 커밋, production dependency 추가, lockfile·package manager 설정 변경, 기존 문서 덮어쓰기, 불명확한 에이전트 override·위험 경로 확정 |
+| 프로젝트 상태 점검, 프로젝트 로컬 `.codex/agents/`와 `.agents/skills/` 하네스 설치·갱신, 실행 프로필 선택·기록, 기본 하위 에이전트 설치 확인, 프로젝트 유형별 에이전트 라우팅 최적화, `AGENTS.md` 생성/보완, 프로젝트 override 여부 확인, 경로·게이트 후보 작성, 진행 정본 준비 상태 판정, `docs/compound/` 최소 초기화, 설치 검증, readiness 보고 | 마일스톤 구현 시작, `docs/progress/milestone-status.md` 선생성, 하위 에이전트로 실제 구현·검증 실행, 커밋, production dependency 추가, lockfile·package manager 설정 변경, 기존 문서 덮어쓰기, 불명확한 에이전트 override·위험 경로 확정 |
 
 초기화 상태와 `orchestrate` 실행 가능 상태를 분리해 보고한다. 신규 프로젝트에서 마일스톤 정본이 없는 것은 정상 상태이며, 이 경우 초기화가 완료됐더라도 `orchestrate readiness`만 `준비 필요`로 보고한다.
 
@@ -70,7 +70,36 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 - 불명확한 충돌은 `확인 필요` 또는 `충돌 보류`로 기록한다.
 - production dependency, lockfile, package manager 설정은 변경하지 않는다.
 
-설치 결과는 `설치됨`, `갱신됨`, `원본 부재`, `확인 필요`, `충돌 보류` 중 하나로 에이전트·스킬별로 기록한다. 프로젝트별 최적화는 기본적으로 agent TOML을 임의 수정하지 않고 `AGENTS.md`의 라우팅 정책으로 기록한다. 프로젝트가 이미 override agent를 갖고 있으면 보존하고 상태를 별도 기록한다.
+설치 결과는 `설치됨`, `갱신됨`, `원본 부재`, `확인 필요`, `충돌 보류` 중 하나로 에이전트·스킬별로 기록한다. 프로젝트별 최적화는 기본적으로 agent TOML을 임의 수정하지 않고 `AGENTS.md`의 라우팅 정책으로 기록한다. 단, 승인된 실행 프로필의 `model`, `model_reasoning_effort` 두 필드는 3.0 절에 따라 갱신할 수 있다. 프로젝트가 이미 override agent를 갖고 있으면 보존하고 상태를 별도 기록한다.
+
+### 3.0 실행 프로필 선택과 적용
+
+실행 프로필은 현재 플러그인 번들의 `references/agent-profiles.json`을 정본으로 사용한다. source agent TOML은 `performance` 프로필과 일치해야 하며, 대상 프로젝트에는 선택된 프로필의 모델·effort만 적용한다.
+
+최초 초기화에서 대상 `AGENTS.md`의 `## oms-codex 운영`에 유효한 `에이전트 실행 프로필` 기록이 없으면, 파일을 만들거나 하네스를 설치하기 전에 다음 선택을 요청한다.
+
+```text
+OMS Codex 실행 프로필을 선택해 주세요.
+1. performance: 직접 구현·전문 검수에 Sol을 선택적으로 사용
+2. economy: data-layer, evaluator, security-auditor만 Sol 유지; page-builder와 일반 작업은 Terra
+3. low-cost: 필수 역할은 Terra/xhigh, 단순 상태·세션 작업은 Luna/medium
+```
+
+- 사용자가 1·2·3 또는 대응하는 profile ID를 선택하지 않으면 `결과: needs-input`으로 종료한다. 이 경우 `.codex/agents/`, `.agents/skills/`, `AGENTS.md`를 생성·수정하지 않는다.
+- 기존 `AGENTS.md`에 `performance`, `economy`, `low-cost` 중 하나가 기록돼 있으면 이를 유지한다. 프로필 변경은 사용자가 새 선택을 명시했을 때만 수행한다.
+- 기록값이 없거나 유효하지 않은데 대상 agent TOML이 이미 있으면 값을 추측하지 않고 `확인 필요`로 보고한다.
+- 일반 설치 또는 갱신으로 대상 agent TOML을 준비한 뒤, 현재 플러그인 번들의 source agents와 대상 agent 디렉터리를 사용해 다음 helper를 실행한다.
+
+```text
+python <현재 플러그인>/.agents/skills/init-project/references/apply-agent-profile.py \
+  --source-agents <현재 플러그인>/.codex/agents \
+  --target-agents .codex/agents \
+  --profile <performance|economy|low-cost>
+```
+
+- helper는 source와 target이 `model`, `model_reasoning_effort` 외에는 동일할 때만 해당 두 필드를 원자적으로 바꾼다. 다른 사용자 변경이 있으면 덮어쓰지 않고 `충돌 보류`로 기록한다.
+- Python을 사용할 수 없으면 helper의 비교·원자성 보장을 대신할 수 없다. agent TOML을 추측해 바꾸지 말고 `확인 필요`로 보고한다.
+- helper 성공 뒤에는 같은 인자에 `--check`를 붙여 14개 대상 agent가 선택 프로필과 일치하는지 확인한다.
 
 ## 4. AGENTS.md 생성 또는 보완
 
@@ -94,6 +123,16 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 | 프론트 구현 | page-builder | <설치됨/원본 부재/확인 필요/충돌 보류> |
 | 백엔드/API/데이터 구현 | data-layer | <설치됨/원본 부재/확인 필요/충돌 보류> |
 | 일반 코드/스크립트/인프라/결정 문서 | <프로젝트 override 또는 오케스트레이터 직접 수행> | <확정/확인 필요> |
+
+### 에이전트 실행 프로필
+
+- 선택: `<performance | economy | low-cost>`
+- 선택 근거: `<사용자 최초 선택 | 사용자 명시 변경 | 기존 기록 유지>`
+- 프로필 정본: `.agents/skills/init-project/references/agent-profiles.json`
+
+| 에이전트 | 모델 | effort |
+|---|---|---|
+| `<선택 프로필의 14개 agent 각각>` | `<agent-profiles.json의 실제 값>` | `<agent-profiles.json의 실제 값>` |
 
 ### 설치된 하네스
 
@@ -132,6 +171,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 ### 설치 검증
 
 - `.codex/agents/` 필수 에이전트 상태: <요약>
+- 실행 프로필과 대상 agent TOML 일치: <통과/실패/미실행>
 - `.agents/skills/` 필수 스킬 상태: <요약>
 - 선택 에이전트와 스킬 상태: <요약>
 - 충돌/확인 필요: <없음 또는 목록>
@@ -267,6 +307,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 - 필수 하위 에이전트 `page-builder`, `data-layer`, `evaluator`, `qa-guard`, `milestone-tracker`, `plan-auditor`, `compound-learner`의 설치 상태가 기록돼 있다.
 - `compound-curator` 설치 상태와 append 학습/무손실 정리 역할 분리가 기록돼 있다.
 - 기본 구현 에이전트 `page-builder`, `data-layer`를 사용할 수 있거나, 프로젝트 override 확인 필요 항목이 명시돼 있다.
+- 유효한 실행 프로필이 기록되고 대상 14개 agent TOML의 model/effort가 해당 프로필과 일치한다.
 - 프로젝트 유형별 에이전트 라우팅과 최적화 결과가 기록돼 있다.
 - 설치 검증 결과가 기록돼 있다.
 - 동작 레이어 prefix와 위험 클래스 후보가 확정 또는 보류 상태로 기록돼 있다.
@@ -300,6 +341,9 @@ orchestrate readiness: <즉시 실행 가능 | 준비 필요>
 적용된 에이전트 라우팅:
 - <우선 에이전트와 게이트 후보>
 
+실행 프로필:
+- <profile ID, 선택 근거, model/effort 일치 결과>
+
 생성/수정한 파일:
 - <없음 또는 파일 목록>
 
@@ -312,6 +356,7 @@ orchestrate readiness: <즉시 실행 가능 | 준비 필요>
 검증 결과:
 - `.codex/agents/` 설치 파일 목록 확인: <결과>
 - 필수 하위 에이전트별 설치 상태 확인: <결과>
+- 선택 실행 프로필 적용·`--check` 확인: <결과>
 - `AGENTS.md` oms-codex 운영 섹션 diff 확인: <결과>
 - `docs/progress/milestone-status.md` 선생성 없음: <결과>
 - production dependency 추가 없음: <결과>

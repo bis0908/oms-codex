@@ -44,5 +44,5 @@
 ## 정적 검증 포인트
 
 - verifier는 정상 시나리오 8개와 부정 시나리오 14개의 연속 ID가 각각 정확히 한 번 존재하는지 확인한다.
-- 모델 정책은 `compound-curator = gpt-5.6-sol/high`, `compound-learner = gpt-5.6-terra/medium`, `evaluator`와 `security-auditor = gpt-5.6-sol/xhigh`를 포함한다.
+- 모델 정책은 `agent-profiles.json`의 세 profile ID를 모두 검증하고, 기본 source agent TOML이 `performance` 프로필과 일치함을 포함한다.
 - agent 수 14와 skill 수 13을 별도로 검사한다. `compound-learner`와 `compound-curator`는 `compound` skill을 공유한다.

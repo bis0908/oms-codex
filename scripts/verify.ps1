@@ -3,37 +3,50 @@ $PSNativeCommandUseErrorActionPreference = $false
 
 $root = Split-Path -Parent $PSScriptRoot
 $errors = New-Object System.Collections.Generic.List[string]
-$agentModelPolicy = @{
-    "bug-fixer.toml" = "gpt-5.6-sol"
-    "compound-curator.toml" = "gpt-5.6-sol"
-    "compound-learner.toml" = "gpt-5.6-terra"
-    "data-layer.toml" = "gpt-5.6-sol"
-    "design-reviewer.toml" = "gpt-5.6-sol"
-    "evaluator.toml" = "gpt-5.6-sol"
-    "milestone-tracker.toml" = "gpt-5.6-luna"
-    "page-builder.toml" = "gpt-5.6-sol"
-    "plan-auditor.toml" = "gpt-5.6-sol"
-    "qa-guard.toml" = "gpt-5.6-terra"
-    "refactor-specialist.toml" = "gpt-5.6-sol"
-    "security-auditor.toml" = "gpt-5.6-sol"
-    "session-archivist.toml" = "gpt-5.6-luna"
-    "tdd-agent.toml" = "gpt-5.6-sol"
+$profileManifestPath = Join-Path $root ".agents\skills\init-project\references\agent-profiles.json"
+$agentModelPolicy = @{}
+$agentEffortPolicy = @{}
+
+if (-not (Test-Path -LiteralPath $profileManifestPath -PathType Leaf)) {
+    [void]$errors.Add("agent profile 설정 파일 없음: $profileManifestPath")
 }
-$agentEffortPolicy = @{
-    "bug-fixer.toml" = "high"
-    "compound-curator.toml" = "high"
-    "compound-learner.toml" = "medium"
-    "data-layer.toml" = "high"
-    "design-reviewer.toml" = "high"
-    "evaluator.toml" = "xhigh"
-    "milestone-tracker.toml" = "medium"
-    "page-builder.toml" = "high"
-    "plan-auditor.toml" = "high"
-    "qa-guard.toml" = "high"
-    "refactor-specialist.toml" = "high"
-    "security-auditor.toml" = "xhigh"
-    "session-archivist.toml" = "medium"
-    "tdd-agent.toml" = "high"
+else {
+    try {
+        $profileManifest = Get-Content -LiteralPath $profileManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($profileManifest.schema_version -ne 1 -or $profileManifest.default_profile -ne "performance") {
+            [void]$errors.Add("agent profile 기본 설정 불일치")
+        }
+
+        foreach ($profileName in @("performance", "economy", "low-cost")) {
+            $profile = $profileManifest.profiles.$profileName
+            if ($null -eq $profile -or $null -eq $profile.agents) {
+                [void]$errors.Add("agent profile 누락: $profileName")
+                continue
+            }
+            foreach ($agent in $profile.agents.PSObject.Properties) {
+                $model = $agent.Value.model
+                $effort = $agent.Value.model_reasoning_effort
+                if ($model -notin @("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna")) {
+                    [void]$errors.Add("agent profile model 불일치: $profileName/$($agent.Name)")
+                }
+                if ($effort -notin @("medium", "high", "xhigh")) {
+                    [void]$errors.Add("agent profile effort 불일치: $profileName/$($agent.Name)")
+                }
+            }
+        }
+
+        $performanceAgents = $profileManifest.profiles.performance.agents
+        if ($null -ne $performanceAgents) {
+            foreach ($agent in $performanceAgents.PSObject.Properties) {
+                $fileName = "$($agent.Name).toml"
+                $agentModelPolicy[$fileName] = $agent.Value.model
+                $agentEffortPolicy[$fileName] = $agent.Value.model_reasoning_effort
+            }
+        }
+    }
+    catch {
+        [void]$errors.Add("agent profile JSON 파싱 실패: $($_.Exception.Message)")
+    }
 }
 
 function Add-ErrorMessage {
@@ -109,6 +122,8 @@ function Get-PythonCommand {
     "install.sh",
     ".codex-plugin\plugin.json",
     ".agents\plugins\marketplace.json",
+    ".agents\skills\init-project\references\agent-profiles.json",
+    ".agents\skills\init-project\references\apply-agent-profile.py",
     ".agents\skills",
     ".codex\agents"
 ) | ForEach-Object { Require-Path $_ }

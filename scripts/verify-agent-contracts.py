@@ -1,29 +1,39 @@
 from __future__ import annotations
 
+import json
 import pathlib
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import tomllib
 
 
 ROOT = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else pathlib.Path(__file__).resolve().parents[1]
 
-POLICY = {
-    "bug-fixer": ("gpt-5.6-sol", "high", "bugfix"),
-    "compound-curator": ("gpt-5.6-sol", "high", "compound"),
-    "compound-learner": ("gpt-5.6-terra", "medium", "compound"),
-    "data-layer": ("gpt-5.6-sol", "high", None),
-    "design-reviewer": ("gpt-5.6-sol", "high", "design-review"),
-    "evaluator": ("gpt-5.6-sol", "xhigh", "evaluate"),
-    "milestone-tracker": ("gpt-5.6-luna", "medium", "milestone-track"),
-    "page-builder": ("gpt-5.6-sol", "high", None),
-    "plan-auditor": ("gpt-5.6-sol", "high", "plan-audit"),
-    "qa-guard": ("gpt-5.6-terra", "high", "qa"),
-    "refactor-specialist": ("gpt-5.6-sol", "high", "refactor"),
-    "security-auditor": ("gpt-5.6-sol", "xhigh", "security-audit"),
-    "session-archivist": ("gpt-5.6-luna", "medium", "session-archive"),
-    "tdd-agent": ("gpt-5.6-sol", "high", "tdd"),
+AGENT_SKILLS = {
+    "bug-fixer": "bugfix",
+    "compound-curator": "compound",
+    "compound-learner": "compound",
+    "data-layer": None,
+    "design-reviewer": "design-review",
+    "evaluator": "evaluate",
+    "milestone-tracker": "milestone-track",
+    "page-builder": None,
+    "plan-auditor": "plan-audit",
+    "qa-guard": "qa",
+    "refactor-specialist": "refactor",
+    "security-auditor": "security-audit",
+    "session-archivist": "session-archive",
+    "tdd-agent": "tdd",
 }
+
+PROFILE_PATH = pathlib.Path(".agents/skills/init-project/references/agent-profiles.json")
+PROFILE_HELPER_PATH = pathlib.Path(".agents/skills/init-project/references/apply-agent-profile.py")
+PROFILE_NAMES = {"performance", "economy", "low-cost"}
+ALLOWED_MODELS = {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}
+ALLOWED_EFFORTS = {"medium", "high", "xhigh"}
 
 COMMON_RETURN_KEYS = (
     "결과:",
@@ -130,16 +140,133 @@ def fail(message: str) -> None:
     print(message, file=sys.stderr)
 
 
+def load_profile_policy(errors: list[str]) -> dict[str, tuple[str, str, str | None]]:
+    profile_path = ROOT / PROFILE_PATH
+    try:
+        data = json.loads(profile_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"agent profile JSON 파싱 실패: {PROFILE_PATH}: {exc}")
+        return {}
+
+    if data.get("schema_version") != 1:
+        errors.append("agent profile schema_version 불일치")
+    if data.get("default_profile") != "performance":
+        errors.append("agent profile 기본값은 performance여야 합니다")
+
+    profiles = data.get("profiles")
+    if not isinstance(profiles, dict) or set(profiles) != PROFILE_NAMES:
+        errors.append(
+            "agent profile 목록 불일치: "
+            f"expected={sorted(PROFILE_NAMES)}, actual={sorted(profiles) if isinstance(profiles, dict) else profiles!r}"
+        )
+        return {}
+
+    expected_agents = set(AGENT_SKILLS)
+    parsed: dict[str, dict[str, dict[str, str]]] = {}
+    for profile_name, profile_data in profiles.items():
+        if not isinstance(profile_data, dict):
+            errors.append(f"agent profile 형식 불일치: {profile_name}")
+            continue
+        agents = profile_data.get("agents")
+        if not isinstance(agents, dict) or set(agents) != expected_agents:
+            errors.append(
+                f"agent profile agent 목록 불일치: {profile_name}: "
+                f"missing={sorted(expected_agents - set(agents) if isinstance(agents, dict) else expected_agents)}, "
+                f"extra={sorted(set(agents) - expected_agents) if isinstance(agents, dict) else []}"
+            )
+            continue
+        parsed[profile_name] = agents
+        for agent_name, values in agents.items():
+            if not isinstance(values, dict):
+                errors.append(f"agent profile 값 형식 불일치: {profile_name}/{agent_name}")
+                continue
+            model = values.get("model")
+            effort = values.get("model_reasoning_effort")
+            if model not in ALLOWED_MODELS:
+                errors.append(f"agent profile model 불일치: {profile_name}/{agent_name}: {model!r}")
+            if effort not in ALLOWED_EFFORTS:
+                errors.append(f"agent profile effort 불일치: {profile_name}/{agent_name}: {effort!r}")
+
+    performance = parsed.get("performance")
+    if performance is None:
+        return {}
+    return {
+        agent_name: (
+            performance[agent_name]["model"],
+            performance[agent_name]["model_reasoning_effort"],
+            AGENT_SKILLS[agent_name],
+        )
+        for agent_name in sorted(expected_agents)
+    }
+
+
+def verify_profile_application(errors: list[str]) -> None:
+    helper_path = ROOT / PROFILE_HELPER_PATH
+    profile_path = ROOT / PROFILE_PATH
+    source_agents = ROOT / ".codex" / "agents"
+    if not helper_path.is_file() or not profile_path.is_file() or not source_agents.is_dir():
+        errors.append("agent profile 적용 fixture를 준비할 수 없습니다")
+        return
+
+    try:
+        profiles = json.loads(profile_path.read_text(encoding="utf-8"))["profiles"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        errors.append(f"agent profile fixture 설정 읽기 실패: {exc}")
+        return
+
+    with tempfile.TemporaryDirectory(prefix="oms-codex-profile-") as temp_dir:
+        target_agents = pathlib.Path(temp_dir) / "agents"
+        shutil.copytree(source_agents, target_agents)
+        for profile_name in ("performance", "economy", "low-cost"):
+            command = [
+                sys.executable,
+                str(helper_path),
+                "--source-agents",
+                str(source_agents),
+                "--target-agents",
+                str(target_agents),
+                "--profile",
+                profile_name,
+            ]
+            result = subprocess.run(command, capture_output=True, text=True, check=False)
+            if result.returncode != 0:
+                errors.append(f"agent profile 적용 실패: {profile_name}: {result.stderr.strip()}")
+                continue
+
+            check_result = subprocess.run(command + ["--check"], capture_output=True, text=True, check=False)
+            if check_result.returncode != 0:
+                errors.append(f"agent profile 확인 실패: {profile_name}: {check_result.stderr.strip()}")
+                continue
+
+            for agent_name, values in profiles[profile_name]["agents"].items():
+                data = tomllib.loads((target_agents / f"{agent_name}.toml").read_text(encoding="utf-8"))
+                if data.get("model") != values["model"] or data.get("model_reasoning_effort") != values["model_reasoning_effort"]:
+                    errors.append(f"agent profile 적용값 불일치: {profile_name}/{agent_name}")
+
+        changed_path = target_agents / "page-builder.toml"
+        changed_text = changed_path.read_text(encoding="utf-8") + "\n# 사용자 변경\n"
+        changed_path.write_text(changed_text, encoding="utf-8")
+        conflict_result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if conflict_result.returncode == 0 or changed_path.read_text(encoding="utf-8") != changed_text:
+            errors.append("agent profile 사용자 변경 충돌 보류 검증 실패")
+
+
 def main() -> int:
     errors: list[str] = []
+    policy = load_profile_policy(errors)
     agents_dir = ROOT / ".codex" / "agents"
     paths = sorted(agents_dir.glob("*.toml"))
     names = {path.stem for path in paths}
 
-    if names != set(POLICY):
+    if names != set(policy):
         errors.append(
             "agent 목록 불일치: "
-            f"missing={sorted(set(POLICY) - names)}, extra={sorted(names - set(POLICY))}"
+            f"missing={sorted(set(policy) - names)}, extra={sorted(names - set(policy))}"
         )
 
     for path in paths:
@@ -153,10 +280,10 @@ def main() -> int:
         if name != path.stem:
             errors.append(f"agent name 불일치: {path.name}: {name!r}")
             continue
-        if name not in POLICY:
+        if name not in policy:
             continue
 
-        expected_model, expected_effort, skill = POLICY[name]
+        expected_model, expected_effort, skill = policy[name]
         if data.get("model") != expected_model:
             errors.append(f"{path.name} model 불일치: {data.get('model')!r}")
         if data.get("model_reasoning_effort") != expected_effort:
@@ -187,7 +314,7 @@ def main() -> int:
             if needle not in text:
                 errors.append(f"필수 계약 텍스트 없음: {relative}: {needle}")
 
-    agent_skill_names = sorted({skill for _, _, skill in POLICY.values() if skill})
+    agent_skill_names = sorted({skill for _, _, skill in policy.values() if skill})
     for skill in agent_skill_names:
         path = ROOT / ".agents" / "skills" / skill / "SKILL.md"
         if not path.is_file():
@@ -272,6 +399,8 @@ def main() -> int:
             for needle in needles:
                 if needle not in row:
                     errors.append(f"시나리오 핵심 결과 누락: {scenario_id}: {needle}")
+
+    verify_profile_application(errors)
 
     if errors:
         for error in errors:

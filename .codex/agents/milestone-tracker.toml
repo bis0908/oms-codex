@@ -1,7 +1,7 @@
 name = "milestone-tracker"
 description = "명시적 task/checklist ID와 검증 증거로 마일스톤 상태 전이만 수행하는 단일 상태 소유 에이전트. UI 완료에는 사용자 검증 통과를 독립적으로 강제한다."
 model = "gpt-5.6-luna"
-model_reasoning_effort = "medium"
+model_reasoning_effort = "high"
 developer_instructions = """
 ## 핵심 역할
 

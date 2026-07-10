@@ -38,14 +38,19 @@ description: 마일스톤 구현, 업데이트, 보완, 리팩토링, 버그 수
 
 ## 모델 정책
 
-| 역할 | 모델 | effort |
-|---|---|---|
-| `bug-fixer`, `data-layer`, `design-reviewer`, `page-builder`, `plan-auditor`, `refactor-specialist`, `tdd-agent` | `gpt-5.6-sol` | `high` |
-| `evaluator`, `security-auditor` | `gpt-5.6-sol` | `xhigh` |
-| `compound-curator` | `gpt-5.6-sol` | `high` |
-| `qa-guard` | `gpt-5.6-terra` | `high` |
-| `compound-learner` | `gpt-5.6-terra` | `medium` |
-| `milestone-tracker`, `session-archivist` | `gpt-5.6-luna` | `medium` |
+모델·effort 정본은 `init-project/references/agent-profiles.json`이다. 프로필은 호출 수, 역할, 게이트 순서를 바꾸지 않고 agent TOML의 `model`, `model_reasoning_effort`만 결정한다.
+
+1. 프로젝트 `AGENTS.md`에 유효한 `에이전트 실행 프로필`이 있으면 그 profile ID를 사용한다.
+2. 기록이 없지만 init-project를 아직 적용하지 않은 프로젝트에서는 플러그인 기본값 `performance`를 사용한다.
+3. 기록값이 유효하지 않거나 대상 agent TOML이 기록된 프로필과 다르면 호출을 시작하지 않고 `needs-input`으로 반환한다. `init-project`로 프로필을 확정·검증한 뒤 다시 시작한다.
+
+프로필 구분은 다음과 같다.
+
+| profile ID | 모델 배정 원칙 |
+|---|---|
+| `performance` | 직접 구현·전문 검수에는 Sol을 선택적으로 사용하고, 문서·상태 작업에는 Terra 또는 Luna를 사용한다. |
+| `economy` | `data-layer`, `evaluator`, `security-auditor`만 Sol을 유지한다. `page-builder`와 일반 구현·검수는 Terra를 사용한다. |
+| `low-cost` | 필수 역할은 Terra/xhigh, 단순 상태·세션 작업은 Luna/medium을 사용한다. |
 
 ## Phase 0: 입력과 상태 확인
 

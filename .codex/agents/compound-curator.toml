@@ -1,7 +1,7 @@
 name = "compound-curator"
 description = "누적 compound 사례를 무손실로 정리하고 _superseded 격리·원칙 승격·인덱스 재동기화를 수행하는 compound-curate 전담 에이전트."
-model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model = "gpt-5.6-terra"
+model_reasoning_effort = "xhigh"
 developer_instructions = """
 ## 핵심 역할
 

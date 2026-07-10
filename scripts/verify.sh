@@ -5,35 +5,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 errors=()
 
-expected_agent_model() {
-  case "$1" in
-    bug-fixer.toml|compound-curator.toml|data-layer.toml|design-reviewer.toml|evaluator.toml|page-builder.toml|plan-auditor.toml|refactor-specialist.toml|security-auditor.toml|tdd-agent.toml) printf '%s\n' "gpt-5.6-sol" ;;
-    compound-learner.toml|qa-guard.toml) printf '%s\n' "gpt-5.6-terra" ;;
-    milestone-tracker.toml|session-archivist.toml) printf '%s\n' "gpt-5.6-luna" ;;
-    *) return 1 ;;
-  esac
-}
-
-expected_agent_effort() {
-  case "$1" in
-    bug-fixer.toml) printf '%s\n' "high" ;;
-    compound-curator.toml) printf '%s\n' "high" ;;
-    compound-learner.toml) printf '%s\n' "medium" ;;
-    data-layer.toml) printf '%s\n' "high" ;;
-    design-reviewer.toml) printf '%s\n' "high" ;;
-    evaluator.toml) printf '%s\n' "xhigh" ;;
-    milestone-tracker.toml) printf '%s\n' "medium" ;;
-    page-builder.toml) printf '%s\n' "high" ;;
-    plan-auditor.toml) printf '%s\n' "high" ;;
-    qa-guard.toml) printf '%s\n' "high" ;;
-    refactor-specialist.toml) printf '%s\n' "high" ;;
-    security-auditor.toml) printf '%s\n' "xhigh" ;;
-    session-archivist.toml) printf '%s\n' "medium" ;;
-    tdd-agent.toml) printf '%s\n' "high" ;;
-    *) return 1 ;;
-  esac
-}
-
 add_error() {
   errors+=("$1")
 }
@@ -70,6 +41,8 @@ for path in \
   "$ROOT/install.sh" \
   "$ROOT/.codex-plugin/plugin.json" \
   "$ROOT/.agents/plugins/marketplace.json" \
+  "$ROOT/.agents/skills/init-project/references/agent-profiles.json" \
+  "$ROOT/.agents/skills/init-project/references/apply-agent-profile.py" \
   "$ROOT/.agents/skills" \
   "$ROOT/.codex/agents"; do
   require_path "$path"
@@ -96,6 +69,7 @@ import sys
 
 root = pathlib.Path(sys.argv[1])
 errors = []
+profile_data = {}
 
 try:
     plugin = json.loads((root / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
@@ -132,13 +106,45 @@ except Exception as exc:
     errors.append(f"marketplace.json 필드 검사 실패: {exc}")
 
 try:
+    profile_data = json.loads(
+        (root / ".agents/skills/init-project/references/agent-profiles.json").read_text(encoding="utf-8")
+    )
+    if profile_data.get("schema_version") != 1 or profile_data.get("default_profile") != "performance":
+        errors.append("agent profile 기본 설정 불일치")
+    profiles = profile_data.get("profiles", {})
+    expected_profiles = {"performance", "economy", "low-cost"}
+    if set(profiles) != expected_profiles:
+        errors.append(f"agent profile 목록 불일치: {sorted(profiles)}")
+    expected_agents = {path.stem for path in (root / ".codex/agents").glob("*.toml")}
+    for profile_name in expected_profiles:
+        agents = profiles.get(profile_name, {}).get("agents", {})
+        if set(agents) != expected_agents:
+            errors.append(f"agent profile agent 목록 불일치: {profile_name}")
+            continue
+        for agent_name, values in agents.items():
+            model = values.get("model") if isinstance(values, dict) else None
+            effort = values.get("model_reasoning_effort") if isinstance(values, dict) else None
+            if model not in {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}:
+                errors.append(f"agent profile model 불일치: {profile_name}/{agent_name}")
+            if effort not in {"medium", "high", "xhigh"}:
+                errors.append(f"agent profile effort 불일치: {profile_name}/{agent_name}")
+except Exception as exc:
+    errors.append(f"agent profile 검사 실패: {exc}")
+
+try:
     import tomllib
 except Exception as exc:
     errors.append(f"tomllib import 실패: {exc}")
 else:
+    performance_agents = profile_data.get("profiles", {}).get("performance", {}).get("agents", {})
     for path in sorted((root / ".codex/agents").glob("*.toml")):
         try:
-            tomllib.loads(path.read_text(encoding="utf-8"))
+            agent_data = tomllib.loads(path.read_text(encoding="utf-8"))
+            expected = performance_agents.get(path.stem, {})
+            if agent_data.get("model") != expected.get("model"):
+                errors.append(f"agent performance model 불일치: {path.name}")
+            if agent_data.get("model_reasoning_effort") != expected.get("model_reasoning_effort"):
+                errors.append(f"agent performance effort 불일치: {path.name}")
         except Exception as exc:
             errors.append(f"{path}: {exc}")
 
@@ -203,18 +209,6 @@ for file in "${agent_files[@]}"; do
   require_text "$file" "^name[[:space:]]*=[[:space:]]*\"$agent_name\"" "agent name"
   require_text "$file" '^description[[:space:]]*=' "agent description"
   require_text "$file" '^developer_instructions[[:space:]]*=' "agent developer_instructions"
-  if expected_model="$(expected_agent_model "$base_name")"; then
-    expected_model_pattern="${expected_model//./\\.}"
-    require_text "$file" "^model[[:space:]]*=[[:space:]]*\"$expected_model_pattern\"[[:space:]]*$" "agent model"
-  else
-    add_error "알 수 없는 custom agent 파일: $base_name"
-  fi
-  if expected_effort="$(expected_agent_effort "$base_name")"; then
-    require_text "$file" "^model_reasoning_effort[[:space:]]*=[[:space:]]*\"$expected_effort\"[[:space:]]*$" "agent model_reasoning_effort"
-  else
-    add_error "알 수 없는 custom agent 파일: $base_name"
-  fi
-
   for field in name description developer_instructions model model_reasoning_effort; do
     field_count="$(grep -Ec "^$field[[:space:]]*=" "$file")"
     [ "$field_count" = "1" ] || add_error "$base_name 필드 개수 불일치: $field=$field_count"
