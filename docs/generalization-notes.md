@@ -7,10 +7,12 @@
 | 구분 | 위치 | 내용 |
 |------|------|------|
 | **운영 골격** | `.codex/agents/`, `.agents/skills/` | 오케스트레이션·구현·검증·학습·추적 역할. 플러그인과 custom agent 설치 대상. |
-| **기본 구현 에이전트** | `.codex/agents/page-builder.toml`, `.codex/agents/data-layer.toml` | 프론트 구현과 데이터/API 구현을 담당한다. 특정 DB·ORM을 고정하지 않고 프로젝트 기존 패턴을 따른다. |
+| **기본 구현 에이전트** | `.codex/agents/page-builder.toml`, `.codex/agents/data-layer.toml` | 프론트 구현과 데이터/API 구현을 담당한다. 특정 DB·ORM을 고정하지 않고 프로젝트 기존 패턴을 따른다. 일반 코드·문서·인프라는 프로젝트 override 또는 오케스트레이터가 담당한다. |
 | **프로젝트 특화 규칙** | 프로젝트 `AGENTS.md`, 로드맵, 티켓, 설계 문서 | 프레임워크, DB/ORM, 테스트 명령, 디자인 시스템, 금지 경로, 운영 정책을 정의한다. |
 
 골격은 "누가 언제 무엇을 구현·검증·조율하는가"를 담는다. 구현 에이전트는 기본 제공하되, 프로젝트가 별도 구현 에이전트를 정의하면 프로젝트 `AGENTS.md`의 override를 우선한다.
+
+하위 에이전트는 부모의 task 상태를 직접 수정하지 않는다. 공통 반환 계약으로 완료 task ID와 증거를 반환하고, 오케스트레이터가 상태를 전이한다. 반복 사례 추가는 `compound-learner`, 다문서 무손실 정리는 `compound-curator`가 담당한다.
 
 ## 2. 용어 치환 규칙
 
@@ -19,6 +21,7 @@
 | 원본 프로젝트명·디렉토리명 | "이 프로젝트" / 삭제 |
 | `<프로젝트명>-*` 스킬명 | 접두사 제거 (`<프로젝트명>-qa` → `qa`) |
 | `page-builder` / `data-layer` | 기본 구현 에이전트 |
+| 일반 코드·스크립트·인프라·결정 문서 | 프로젝트 구현 override. 없으면 오케스트레이터 직접 수행 |
 | 레거시 분석 전용 역할 | 기본 하네스에서 제외. 필요 시 별도 분석 작업 또는 별도 에이전트로 추가 |
 | PHP 원본 / 레거시 분석 | "레거시 소스(있을 경우)" / "원본 스펙" |
 | JS-only, no-ORM, shadcn 화이트리스트, `__` 테이블 prefix | "프로젝트 AGENTS.md가 정한 컨벤션" (구체 항목은 프로젝트가 채움) |
@@ -42,6 +45,8 @@
 ## 4. 보존한 것
 
 - 에이전트 역할 경계·입출력 계약·반환 형식 (팀 협업 프로토콜의 핵심)
+- 필수 게이트 fail-closed, 보조 작업 fail-open 구분
+- task/checklist ID 기반 상태 전이와 request ID 기반 산출물 연결
 - 한국어 서술, 문서 구조, 검증 등급(✓/△/✗/⚠) 체계
 - `docs/compound/`·`docs/progress/`·`_workspace/` 디렉토리 컨벤션 (하네스 고유 인프라)
 - `마일스톤` 용어 (범용 작업 단위로 사용)
@@ -56,3 +61,16 @@
 | install-time 훅 (선택) | 프로젝트별 Codex 훅/설정 위치 | 프로젝트가 작성. 실행 시점에 차단·검사로 강제. |
 
 원칙: **구체 훅 명령은 프로젝트 특화**(린터·패키지 매니저·금지 확장자·시크릿 파일 패턴)이므로 골격(`.codex/agents/`·`.agents/skills/`)에 포함하지 않는다. 골격은 "컨벤션을 훅으로도 집행할 수 있다"는 개념만 안내하고, 구체 구현은 프로젝트가 채운다. graceful 기본값: 훅이 없어도 골격 동작에는 영향이 없다.
+
+## 6. 프로젝트별 필수 운영 선언
+
+`init-project`는 대상 `AGENTS.md`에 다음 항목을 확정하거나 `확인 필요`로 남긴다.
+
+- 일반 코드·문서·인프라 구현 override
+- 보안 고위험 path/keyword manifest
+- 시각 전용 path manifest
+- 마이그레이션 적용·rollback·backup 명령
+- 커밋 정책: `auto`, `ask`, `disabled` 중 하나. 미정의 기본값은 `ask`
+- `commit-local` capability 사용 가능 여부
+
+manifest가 없으면 API route와 server action은 보수적으로 security-auditor 대상이다. 시각 전용 manifest가 없으면 버그 경로에서 경로만으로 evaluator를 스킵하지 않는다.

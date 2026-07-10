@@ -1,20 +1,37 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 $PSNativeCommandUseErrorActionPreference = $false
 
 $root = Split-Path -Parent $PSScriptRoot
 $errors = New-Object System.Collections.Generic.List[string]
+$agentModelPolicy = @{
+    "bug-fixer.toml" = "gpt-5.6-sol"
+    "compound-curator.toml" = "gpt-5.6-sol"
+    "compound-learner.toml" = "gpt-5.6-terra"
+    "data-layer.toml" = "gpt-5.6-sol"
+    "design-reviewer.toml" = "gpt-5.6-sol"
+    "evaluator.toml" = "gpt-5.6-sol"
+    "milestone-tracker.toml" = "gpt-5.6-luna"
+    "page-builder.toml" = "gpt-5.6-sol"
+    "plan-auditor.toml" = "gpt-5.6-sol"
+    "qa-guard.toml" = "gpt-5.6-terra"
+    "refactor-specialist.toml" = "gpt-5.6-sol"
+    "security-auditor.toml" = "gpt-5.6-sol"
+    "session-archivist.toml" = "gpt-5.6-luna"
+    "tdd-agent.toml" = "gpt-5.6-sol"
+}
 $agentEffortPolicy = @{
     "bug-fixer.toml" = "high"
+    "compound-curator.toml" = "high"
     "compound-learner.toml" = "medium"
     "data-layer.toml" = "high"
     "design-reviewer.toml" = "high"
-    "evaluator.toml" = "high"
+    "evaluator.toml" = "xhigh"
     "milestone-tracker.toml" = "medium"
     "page-builder.toml" = "high"
     "plan-auditor.toml" = "high"
     "qa-guard.toml" = "high"
     "refactor-specialist.toml" = "high"
-    "security-auditor.toml" = "high"
+    "security-auditor.toml" = "xhigh"
     "session-archivist.toml" = "medium"
     "tdd-agent.toml" = "high"
 }
@@ -160,17 +177,20 @@ if (Test-Path -LiteralPath $agentsPath -PathType Container) {
         if ($text -notmatch "(?m)^name\s*=\s*`"$([regex]::Escape($expectedName))`"\s*$") {
             Add-ErrorMessage "$($file.Name) name 필드 불일치"
         }
-        if ($text -notmatch '(?m)^model\s*=\s*"gpt-5\.5"\s*$') {
-            Add-ErrorMessage "$($file.Name) model 필드 불일치"
+        if ($agentModelPolicy.ContainsKey($file.Name)) {
+            $expectedModel = $agentModelPolicy[$file.Name]
+            if ($text -notmatch "(?m)^model\s*=\s*`"$([regex]::Escape($expectedModel))`"\s*$") {
+                Add-ErrorMessage "$($file.Name) model 정책 불일치: expected $expectedModel"
+            }
+        }
+        else {
+            Add-ErrorMessage "알 수 없는 custom agent 파일: $($file.Name)"
         }
         if ($agentEffortPolicy.ContainsKey($file.Name)) {
             $expectedEffort = $agentEffortPolicy[$file.Name]
             if ($text -notmatch "(?m)^model_reasoning_effort\s*=\s*`"$expectedEffort`"\s*$") {
                 Add-ErrorMessage "$($file.Name) effort 정책 불일치: expected $expectedEffort"
             }
-        }
-        elseif ($text -match '(?m)^model_reasoning_effort\s*=\s*"(?!medium|high)")') {
-            Add-ErrorMessage "$($file.Name) 허용되지 않는 effort 값"
         }
     }
 
@@ -207,11 +227,28 @@ if (Test-Path -LiteralPath $skillsPath -PathType Container) {
     }
 }
 
+$contractVerifier = Join-RootPath "scripts\verify-agent-contracts.py"
+if (Test-Path -LiteralPath $contractVerifier -PathType Leaf) {
+    $pythonCommand = Get-PythonCommand
+    if ($null -eq $pythonCommand) {
+        Add-ErrorMessage "agent 계약 검증용 python 또는 python3 명령을 찾지 못했습니다"
+    }
+    else {
+        $contractOutput = & $pythonCommand $contractVerifier $root 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Add-ErrorMessage "agent 의미 계약 검증 실패:`n$contractOutput"
+        }
+    }
+}
+else {
+    Add-ErrorMessage "agent 계약 검증 스크립트 없음: scripts\verify-agent-contracts.py"
+}
+
 if (-not (Get-Command rg -ErrorAction SilentlyContinue)) {
     Add-ErrorMessage "rg 명령을 찾지 못했습니다"
 }
 else {
-    $legacyPattern = 'Agent\(|Skill\(|TaskCreate|TaskList|TaskUpdate|run_in_background|CLAUDE\.md|/orchestrate|~/.claude|\.claude/settings\.json|\.claude-plugin|gpt-5\.4|gpt-5\.4-mini|model:\s*opus|opus'
+    $legacyPattern = 'Agent\(|Skill\(|TaskCreate|TaskList|TaskUpdate|run_in_background|CLAUDE\.md|~/.claude|\.claude/settings\.json|\.claude-plugin|gpt-5\.4|gpt-5\.4-mini|model:\s*opus|opus'
     $legacyOutput = & rg --hidden $legacyPattern $root --glob '!scripts/verify.*' --glob '!docs/superpowers/specs/**' 2>&1
     $legacyExit = $LASTEXITCODE
 

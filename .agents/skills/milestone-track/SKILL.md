@@ -74,7 +74,7 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
 |---|---|---|
 | (없음) | 미시작 | 아직 착수 안 함 |
 | 🔄 | 진행 중 | 한 개 이상 완료, 미완료 항목 존재 |
-| ✅ | 완료 | 모든 항목 완료 + evaluator 검증 통과 |
+| ✅ | 완료 | 모든 항목 완료 + evaluator 검증 통과 + UI 작업이면 사용자 검증 통과 |
 
 ---
 
@@ -169,14 +169,19 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
 
 ```markdown
 완료 항목:
-- <파일 또는 검증 항목>
+- <task_id와 checklist_id로 식별한 항목>
 
 마일스톤: M{N}
-단계: <phase-3-impl | phase-4-eval>
+단계: <phase-3-impl | phase-4-eval | phase-5-complete | plan-remediation>
 에이전트: <발신 에이전트>
+작업 유형: <UI | non-UI>
+task_ids: <완료 또는 검증한 task_id 목록>
+checklist_ids: <갱신 대상 체크리스트 ID 목록>
 ```
 
 필수 필드가 누락되면 `docs/progress/milestone-status.md`를 수정하지 않는다. 누락 필드와 필요한 재전송 형식을 반환한다.
+
+`phase-4-eval`에는 `검증 결과`, evaluator의 정확한 `보고서` 경로가 추가로 필수다. `phase-5-complete`에는 evaluator의 원본 승인 신호, 모든 필수 게이트 결과, `작업 유형`, orchestrator 발신이 필수다. `작업 유형: UI`이면 `사용자 검증: 통과`와 근거도 필수다. 허용 조합은 `page-builder`, `data-layer`, `bug-fixer`, `refactor-specialist` 또는 일반 작업을 직접 수행한 `orchestrator`의 `phase-3-impl`, `evaluator`의 `phase-4-eval`, `orchestrator`의 `phase-5-complete`, `orchestrator`의 `plan-remediation`뿐이며, 다른 phase/발신자 조합은 상태를 바꾸지 않고 `needs-input`으로 재전송을 요청한다.
 
 ### [1단계] 구현 완료 (`phase-3-impl`)
 
@@ -185,7 +190,8 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
 ```
 1. docs/progress/milestone-status.md(골격) 읽기
 2. 신호의 마일스톤 번호(M{N}) 섹션 찾기
-3. 완료된 파일 경로와 작업 항목을 매칭하여 [ ] → [x] (YYYY-MM-DD) 업데이트
+3. 신호의 `task_ids -> checklist_ids` 매핑을 그대로 적용하여 [ ] → [x] (YYYY-MM-DD) 업데이트
+   - ID가 골격 또는 작업 로그의 명시적 매핑과 일치하지 않으면 임의 추정하지 않고 갱신을 중단한다
    - 골격 체크박스 줄 꼬리말은 "골격 1줄 상한 (규범)"을 따른다 (≤80자·화이트리스트, 금지 항목은 작업 로그로)
 4. 상세 작업기록(산출물 목록·검증 보고서 경로·선결정·근거)은 골격이 아니라
    docs/progress/milestones/M{N}.md "검증·후속 기록"에 최신순으로 추가한다
@@ -201,23 +207,15 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
    (narrative 금지 — "골격 1줄 상한 (규범)" 참조, 상세는 4번 하위문서로)
 ```
 
-### [2단계] evaluator 검증 승인 (`phase-4-eval`, `검증 결과: approved`)
+### [2단계] evaluator 검증 기록 (`phase-4-eval`)
 
 발신: evaluator **only**
 
 ```
 1. docs/progress/milestone-status.md(골격) 읽기
-2. 해당 마일스톤의 모든 항목이 [x]인지 확인
-3a. 모두 [x]이면:
-    - 마일스톤 헤더를 ✅ 완료로 변경
-    - 요약 "진행 단계" = 완료
-    - 요약 "다음 작업" = 다음 마일스톤 이름
-    - 반환 메시지에 "M{N} ✅ 완료" 포함 (오케스트레이터가 수신)
-3b. 미완료 항목이 남아 있으면:
-    - 헤더를 바꾸지 않는다
-    - 반환 메시지에 경고 포함 (오케스트레이터가 수신):
-      "⚠ M{N} evaluator 승인 도착, 미완료 항목 {N}개 잔존: <목록>"
-4. evaluator 승인 근거(보고서 경로·gap 요약)는 골격이 아니라
+2. evaluator의 `검증 결과`와 정확한 보고서 경로를 검증한다
+3. 승인·수정필요와 관계없이 이 단계에서는 마일스톤 헤더를 ✅로 바꾸지 않는다
+4. evaluator 근거(보고서 경로·gap 요약)는 골격이 아니라
    docs/progress/milestones/M{N}.md "검증·후속 기록"에 최신순으로 추가한다
    - 신호에 `검증 부채:` 줄이 동봉되고 값이 `없음`이 아니면, 그 목록을 같은 기록에
      "검증 부채" 항목으로 함께 적는다 (검증 약화 이벤트의 영구 원장 — 골격 체크박스
@@ -225,19 +223,50 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
 5. "마지막 업데이트" = `YYYY-MM-DD HH:MM KST` 한 줄로만 갱신
 ```
 
-**`검증 결과: approved` 와 정확히 일치하지 않는 모든 evaluator 신호(`검증 결과: 수정필요`, 필드 누락 등)는 1단계와 동일하게 처리한다 (구현 완료로만 기록, ✅ 불가).**
+**`phase-4-eval`은 완료 전이를 수행하지 않는다.** evaluator 신호를 구현 완료 신호처럼 사용해 체크리스트를 새로 체크하지도 않는다.
+
+### [3단계] 최종 완료 (`phase-5-complete`)
+
+발신: orchestrator **only**
+
+```text
+1. 모든 task/checklist 항목이 [x]인지 확인한다
+2. evaluator 원본 신호가 `검증 결과: approved`인지 확인한다
+3. 필수 design/QA/security가 approved이고 inconclusive가 없는지 확인한다
+4. 작업 유형이 UI이면 `사용자 검증: 통과`와 근거를 확인한다
+5. 위 조건이 모두 참이면 헤더를 ✅ 완료, 진행 단계를 완료로 갱신한다
+6. 하나라도 누락되면 상태를 유지하고 `needs-input` 또는 `blocked`로 거부한다
+```
+
+non-UI만 `사용자 검증: N/A`를 허용한다. 검증 부채는 작업 로그에 기록하되 필수 게이트 미검증을 완료로 바꾸는 근거로 사용하지 않는다.
+
+### [4단계] 계획 감사 보완 (`plan-remediation`)
+
+발신: orchestrator **only**
+
+다음 입력이 모두 있어야 정본을 수정한다.
+
+```text
+plan-auditor 보고서: _workspace/plan_audit_*.md의 정확한 경로
+task_ids: 보완 대상 task_id 목록
+checklist_ids: 보완 대상 checklist_id 목록
+사용자 승인: 통과
+승인 근거: 사용자 메시지 또는 결정 ID
+```
+
+plan-auditor 보고서는 진단 근거일 뿐 직접 수정 권한이 아니다. `사용자 승인: 통과`와 승인 근거가 없으면 어떤 체크리스트·작업 로그도 수정하지 않고 `needs-input`을 반환한다. 승인된 경우에도 보고서의 before→after 권고 중 명시된 ID에 해당하는 항목만 수정하며, 새 완료 판정을 만들거나 evaluator/UI 사용자 검증 게이트를 우회하지 않는다.
 
 ---
 
 ## 작업 항목 매칭 규칙
 
-완료 신호의 파일 경로 목록을 작업 항목에 연결하는 방법:
+완료 신호는 오케스트레이터가 전달한 `task_id -> checklist_id` 매핑만 사용한다.
 
-- 화면/페이지 파일 경로 → 대응하는 "{화면} 구현" 항목으로 매칭
-- 데이터 접근 레이어 파일 경로 → 대응하는 데이터 레이어 작업 항목으로 매칭
-- 파일명으로 특정이 어려우면 신호 발신 에이전트와 마일스톤 번호로 근사 매칭
+- 파일 경로, 파일명, 발신 에이전트, 마일스톤 번호로 체크리스트를 추측하지 않는다.
+- 하나의 task가 여러 checklist 항목을 완료한다면 모든 ID를 신호에 명시해야 한다.
+- ID가 없거나 중복·불일치하면 상태 파일을 수정하지 않는다.
 
-매칭 실패 시: 오케스트레이터에 확인 요청 (임의 체크 금지)
+매칭 실패 시: `결과: needs-input`으로 오케스트레이터에 정확한 매핑 재전송을 요청한다.
 
 ## 반환 형식
 
@@ -246,6 +275,7 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
 ```markdown
 완료 항목:
 - <갱신한 마일스톤 항목>
+완료 task_id: <갱신한 task_id 목록 또는 없음>
 
 미완료 항목:
 - <남은 체크리스트 항목 또는 없음>
@@ -253,13 +283,28 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
 확인 필요:
 - <필수 필드 누락 또는 매칭 실패 항목>
 
+검증:
+- <ID 매핑·자가검증·사용자 승인 확인 결과>
+
+미검증 항목:
+- <없음 또는 확인하지 못한 항목>
+
 다음 단계:
 - <qa-guard/evaluator/다음 마일스톤>
 
+request_id: <호출 request_id>
+결과: <completed | needs-input | blocked | failed>
 마일스톤: M{N}
-단계: <progress-update>
+단계: <phase-3-impl | phase-4-eval | phase-5-complete | plan-remediation>
 에이전트: milestone-tracker
+상태 전이: <없음 | from -> to>
+적용 checklist_id: <없음 | ID 목록>
+작업 유형: <UI | non-UI>
+사용자 검증: <통과 | 실패 | 누락 | N/A>
+거부 사유: <없음 | 사유>
 ```
+
+상태 갱신과 자가검증이 끝나면 `completed`, 필수 필드·ID·사용자 검증이 필요하면 `needs-input`, 파일 잠금·권한 등으로 정본을 읽거나 쓸 수 없으면 `blocked`, 쓰기 또는 자가검증 실패는 `failed`다.
 
 ---
 

@@ -93,6 +93,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 |---|---|---|
 | 프론트 구현 | page-builder | <설치됨/원본 부재/확인 필요/충돌 보류> |
 | 백엔드/API/데이터 구현 | data-layer | <설치됨/원본 부재/확인 필요/충돌 보류> |
+| 일반 코드/스크립트/인프라/결정 문서 | <프로젝트 override 또는 오케스트레이터 직접 수행> | <확정/확인 필요> |
 
 ### 설치된 하네스
 
@@ -105,6 +106,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 | milestone-tracker | `.codex/agents/milestone-tracker.toml` | <상태> |
 | plan-auditor | `.codex/agents/plan-auditor.toml` | <상태> |
 | compound-learner | `.codex/agents/compound-learner.toml` | <상태> |
+| compound-curator | `.codex/agents/compound-curator.toml` | <상태> |
 
 ### 에이전트 라우팅
 
@@ -114,6 +116,9 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 | 백엔드/API/데이터 구현 | data-layer | tdd-agent, security-auditor, qa-guard |
 | 요구사항 검증 | evaluator | qa-guard, design-reviewer, security-auditor |
 | 계획·진행 관리 | plan-auditor, milestone-tracker | compound-learner |
+| 반복 학습 추가 | compound-learner | 없음 |
+| 누적 학습 무손실 정리 | compound-curator | 없음 |
+| 일반 코드·문서·인프라 | 프로젝트 override 또는 오케스트레이터 | qa-guard, evaluator |
 
 ### 프로젝트 최적화
 
@@ -121,6 +126,8 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 - 판정 근거: <실제 확인한 파일/경로>
 - 적용 라우팅: <실제 설치된 에이전트 기준>
 - override 상태: <없음/확인 필요/프로젝트 로컬 override 사용>
+- 커밋 정책: <auto/ask/disabled, 미정의 시 ask>
+- commit-local capability: <사용 가능/부재>
 
 ### 설치 검증
 
@@ -129,10 +136,19 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 - 선택 에이전트와 스킬 상태: <요약>
 - 충돌/확인 필요: <없음 또는 목록>
 
+### 커밋 capability preflight
+
+1. 현재 세션에 노출된 skill/capability 목록에서 정확한 이름 `commit-local`을 확인한다.
+2. 목록을 확인할 수 없으면 현재 환경의 실제 skill 경로를 읽어 존재를 확인한다. 추정 이름이나 `commit` alias를 만들지 않는다.
+3. 확인되면 `사용 가능`, 없으면 `부재`로 기록한다. init-project가 새 skill을 설치하거나 사용자 전역 설정을 수정하지 않는다.
+4. 프로젝트 커밋 정책을 `auto`, `ask`, `disabled` 중 하나로 기록한다. 사용자가 정하지 않았으면 `ask`다.
+5. `auto`인데 capability가 없으면 readiness에 자동 커밋 불가를 명시하되 하네스 초기화 자체를 실패시키지 않는다.
+
 ### 경로와 게이트
 
 - 동작 레이어 prefix 후보: <후보 목록 또는 미정>
 - 보안 고위험 prefix/키워드 후보: <후보 목록 또는 미정>
+- 시각 전용 prefix 후보: <후보 목록 또는 없음>
 - 마이그레이션/스키마/백필 위험 클래스 후보: <후보 목록 또는 미정>
 
 ### 문서 경로
@@ -143,7 +159,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 - 임시 검증 산출물: `_workspace/`
 ```
 
-프로젝트가 별도 구현 에이전트를 정의했다면 이 표에 override로 기록한다. 모호하면 기본값을 유지하고 `확인 필요`에 남긴다. 레거시 분석은 기본 하네스에 포함하지 않으므로, 포팅 프로젝트에서 원본 분석이 필요하면 별도 분석 방법을 사용자 확인 항목으로 남긴다.
+프로젝트가 별도 구현 에이전트를 정의했다면 이 표에 override로 기록한다. 일반 코드·문서·인프라 역할이 모호하면 data-layer로 자동 배정하지 않고 `확인 필요`에 남긴다. 레거시 분석은 기본 하네스에 포함하지 않으므로, 포팅 프로젝트에서 원본 분석이 필요하면 별도 분석 방법을 사용자 확인 항목으로 남긴다.
 
 ## 5. 경로와 게이트 설정
 
@@ -151,7 +167,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 ### 동작 레이어 prefix 후보
 
-목적: bugfix와 증분 재게이팅에서 evaluator/qa/security 재진입 여부를 경로 prefix로 판정한다.
+목적: 구현 파일 분류와 증분 재게이팅 범위를 좁힌다. 기능형 버그의 evaluator 실행 여부를 경로 prefix만으로 스킵하지 않는다.
 
 후보 예:
 
@@ -163,6 +179,14 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 프로젝트에 맞는 prefix만 남긴다. prefix가 미정이면 보수 기본값으로 "전 파일 동작 레이어 취급 필요"를 보고한다.
 
+### 시각 전용 prefix 후보
+
+목적: 순수 시각형 버그에서 evaluator를 사용자 시각 검증으로 대체할 수 있는 경계를 명시한다.
+
+- 실제로 기능 로직이 없는 token/theme/static style 경로만 후보로 둔다.
+- component, JSX/TSX, template 경로는 클릭·상태·조건부 렌더가 섞일 수 있으므로 기본 후보에 넣지 않는다.
+- 후보가 없으면 `없음`으로 기록하고 evaluator를 보수적으로 실행한다.
+
 ### 보안 고위험 prefix/키워드 후보
 
 목적: qa-guard의 `보안 심층 검토 필요` 신호와 security-auditor 게이트를 준비한다.
@@ -173,7 +197,7 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 - `token`, `cookie`, `password`, `secret`, `credential`, `personal`, `privacy`, `pii`
 - 한국어 문서 키워드: `인증`, `인가`, `권한`, `세션`, `토큰`, `쿠키`, `결제`, `웹훅`, `업로드`, `삭제`, `개인정보`, `내보내기`
 
-후보 prefix는 실제 경로가 존재할 때만 확정한다. 키워드는 문서·티켓 탐지용 후보로 둘 수 있다.
+후보 prefix는 실제 경로가 존재할 때만 확정한다. 키워드는 문서·티켓 탐지용 후보로 둘 수 있다. manifest가 미정이면 모든 API route와 server action을 security-auditor 대상으로 본다고 기록한다.
 
 ### 마이그레이션/스키마/백필 위험 클래스 후보
 
@@ -241,10 +265,12 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 - `AGENTS.md`에 oms-codex 운영 섹션이 존재한다.
 - `.codex/agents/`와 필요한 `.agents/skills/` 하네스 설치 또는 설치 불가 사유가 기록돼 있다.
 - 필수 하위 에이전트 `page-builder`, `data-layer`, `evaluator`, `qa-guard`, `milestone-tracker`, `plan-auditor`, `compound-learner`의 설치 상태가 기록돼 있다.
+- `compound-curator` 설치 상태와 append 학습/무손실 정리 역할 분리가 기록돼 있다.
 - 기본 구현 에이전트 `page-builder`, `data-layer`를 사용할 수 있거나, 프로젝트 override 확인 필요 항목이 명시돼 있다.
 - 프로젝트 유형별 에이전트 라우팅과 최적화 결과가 기록돼 있다.
 - 설치 검증 결과가 기록돼 있다.
 - 동작 레이어 prefix와 위험 클래스 후보가 확정 또는 보류 상태로 기록돼 있다.
+- 보안 고위험 manifest, 시각 전용 manifest, 커밋 정책, `commit-local` capability 상태가 기록돼 있다.
 - `docs/progress/milestone-status.md` 존재 여부와 부재 시 첫 마일스톤 착수 때 생성될 수 있음을 기록했다.
 - `docs/compound/` 최소 초기화 여부를 처리했다.
 

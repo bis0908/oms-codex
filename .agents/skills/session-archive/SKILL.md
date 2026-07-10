@@ -52,6 +52,8 @@ docs/history/YYYY/MM/DD/NN-kebab-case-session-log.md
 docs/handoffs/NN-kebab-case-handoff.md
 ```
 
+`NN`은 대상 디렉토리의 기존 두 자리 prefix 최댓값에 1을 더해 결정한다. 쓰기 직전에 디렉토리를 다시 조회하고 원자적 신규 생성으로 충돌을 확인한다. 같은 번호나 경로가 이미 생겼으면 덮어쓰지 말고 번호를 재계산해 재시도한다.
+
 `docs/progress/**`는 절대 수정하지 않는다. 마일스톤 완료 여부, 체크박스, 작업 로그 원장은 milestone-tracker 소유다.
 
 ## 작성 절차
@@ -61,7 +63,7 @@ docs/handoffs/NN-kebab-case-handoff.md
 2. 최신 진행 상태와 검증 보고서를 읽어 사실만 추출한다.
 3. 변경 파일, 결정 사항, 검증 결과, 보류 항목을 중복 없이 정리한다.
 4. 민감정보와 placeholder를 점검한다.
-5. 지정 경로에 문서를 작성한다.
+5. 민감정보는 원문을 저장하지 않고 `[REDACTED:<종류>]`로 마스킹한 뒤 지정 경로에 문서를 작성한다.
 6. 작성 경로와 확인 필요 항목을 표준 반환으로 보고한다.
 ```
 
@@ -105,14 +107,18 @@ docs/handoffs/NN-kebab-case-handoff.md
 
 - API key, token, password, private key, cookie 값 원문 없음
 - 실제 개인정보 원문 없음
+- 명령 출력·보고서·diff에 포함된 민감정보도 인용 전에 마스킹함
 - placeholder가 그대로 남아 있으면 확인 필요에 기록
 - 검증 결과를 과장하지 않음. 실행하지 않은 검증은 미실행으로 적음
+
+민감정보를 안전하게 분리·마스킹할 수 없으면 파일을 만들지 않는다. 원문을 임시 문서에 먼저 쓴 뒤 지우는 방식도 금지한다. 이 경우 `결과: blocked`, `기록 결과: skipped`로 반환하고 필요한 비민감 요약을 요청한다.
 
 ## 표준 반환
 
 ```markdown
 완료 항목:
 - <작성한 세션 로그 또는 인계 문서 경로>
+완료 task_id: <없음 또는 완료한 task_id 목록>
 
 미완료 항목:
 - <없음 또는 작성하지 못한 문서>
@@ -120,11 +126,22 @@ docs/handoffs/NN-kebab-case-handoff.md
 확인 필요:
 - <없음 또는 누락된 사실/검증 결과>
 
+검증:
+- <민감정보 스캔·경로 충돌 확인 결과>
+
+미검증 항목:
+- <없음 또는 확인하지 못한 항목>
+
 다음 단계:
 - <오케스트레이터 최종 보고 | 사용자 확인>
 
 마일스톤: M{N | N/A}
 단계: session-archive
 에이전트: session-archivist
-기록 결과: <created | skipped | 확인필요>
+기록 결과: <created | skipped | blocked>
+민감정보 점검: <pass | blocked>
+redaction: <없음 | 마스킹 항목>
+파일명 충돌 처리: <없음 | 재계산한 NN>
+request_id: <호출 request_id>
+결과: <completed | needs-input | blocked | failed>
 ```

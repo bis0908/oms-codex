@@ -22,6 +22,7 @@
 | agent | milestone-tracker | `.codex/agents/milestone-tracker.toml` | `.codex/agents/milestone-tracker.toml` |
 | agent | plan-auditor | `.codex/agents/plan-auditor.toml` | `.codex/agents/plan-auditor.toml` |
 | agent | compound-learner | `.codex/agents/compound-learner.toml` | `.codex/agents/compound-learner.toml` |
+| agent | compound-curator | `.codex/agents/compound-curator.toml` | `.codex/agents/compound-curator.toml` |
 | skill | init-project | `.agents/skills/init-project/` | `.agents/skills/init-project/` |
 | skill | orchestrate | `.agents/skills/orchestrate/` | `.agents/skills/orchestrate/` |
 | skill | evaluate | `.agents/skills/evaluate/` | `.agents/skills/evaluate/` |
@@ -41,6 +42,7 @@
 | tdd-agent | `.codex/agents/tdd-agent.toml` | `.agents/skills/tdd/` |
 | bugfix-agent | `.codex/agents/bug-fixer.toml` | `.agents/skills/bugfix/` |
 | refactor-agent | `.codex/agents/refactor-specialist.toml` | `.agents/skills/refactor/` |
+| session-archivist | `.codex/agents/session-archivist.toml` | `.agents/skills/session-archive/` |
 
 `bugfix-agent`와 `refactor-agent`는 라우팅 논리 이름이다. 실제 번들 파일명은 각각 `bug-fixer.toml`, `refactor-specialist.toml`이다. 실제 원본 파일명이 없으면 새 이름으로 파일을 만들지 말고 `원본 부재`로 보고한다.
 
@@ -67,7 +69,7 @@
 | 프론트 중심 | `page-builder` 우선 | `design-reviewer`, `qa-guard` |
 | 백엔드/API 중심 | `data-layer` 우선 | `tdd-agent`, `security-auditor`, `qa-guard` |
 | 풀스택 | `page-builder`와 `data-layer` 병행 | `evaluator`, `qa-guard`, `security-auditor`, `design-reviewer` |
-| 문서/계획 중심 | `plan-auditor`, `milestone-tracker` 우선 | `compound-learner` |
+| 문서/계획 중심 | 계획 감사는 `plan-auditor`, 상태 기록은 `milestone-tracker`, 문서 구현은 프로젝트 override 또는 오케스트레이터 | `qa-guard`, `evaluator` |
 
 게이트 후보는 실제 설치된 항목만 활성으로 기록한다. 원본 부재나 충돌 보류 항목은 후보에서 제외하거나 `확인 필요`로 남긴다.
 
@@ -83,6 +85,9 @@
 - 프로젝트 유형 판정과 근거 경로
 - 적용된 에이전트 라우팅
 - 프로젝트 override 존재 여부
+- 일반 코드·문서·인프라 구현 override 또는 오케스트레이터 직접 수행 여부
+- 보안 고위험 path/keyword manifest와 시각 전용 path manifest
+- 커밋 정책(`auto`, `ask`, `disabled`)과 `commit-local` capability 상태
 - 충돌/확인 필요 목록
 
 ## 금지

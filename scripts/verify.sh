@@ -5,19 +5,29 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 errors=()
 
+expected_agent_model() {
+  case "$1" in
+    bug-fixer.toml|compound-curator.toml|data-layer.toml|design-reviewer.toml|evaluator.toml|page-builder.toml|plan-auditor.toml|refactor-specialist.toml|security-auditor.toml|tdd-agent.toml) printf '%s\n' "gpt-5.6-sol" ;;
+    compound-learner.toml|qa-guard.toml) printf '%s\n' "gpt-5.6-terra" ;;
+    milestone-tracker.toml|session-archivist.toml) printf '%s\n' "gpt-5.6-luna" ;;
+    *) return 1 ;;
+  esac
+}
+
 expected_agent_effort() {
   case "$1" in
     bug-fixer.toml) printf '%s\n' "high" ;;
+    compound-curator.toml) printf '%s\n' "high" ;;
     compound-learner.toml) printf '%s\n' "medium" ;;
     data-layer.toml) printf '%s\n' "high" ;;
     design-reviewer.toml) printf '%s\n' "high" ;;
-    evaluator.toml) printf '%s\n' "high" ;;
+    evaluator.toml) printf '%s\n' "xhigh" ;;
     milestone-tracker.toml) printf '%s\n' "medium" ;;
     page-builder.toml) printf '%s\n' "high" ;;
     plan-auditor.toml) printf '%s\n' "high" ;;
     qa-guard.toml) printf '%s\n' "high" ;;
     refactor-specialist.toml) printf '%s\n' "high" ;;
-    security-auditor.toml) printf '%s\n' "high" ;;
+    security-auditor.toml) printf '%s\n' "xhigh" ;;
     session-archivist.toml) printf '%s\n' "medium" ;;
     tdd-agent.toml) printf '%s\n' "high" ;;
     *) return 1 ;;
@@ -152,7 +162,7 @@ else
   agent_count="0"
 fi
 
-if [ "$agent_count" != "13" ]; then
+if [ "$agent_count" != "14" ]; then
   add_error ".codex/agents TOML 파일 수 불일치: $agent_count"
 fi
 
@@ -162,6 +172,7 @@ shopt -u nullglob
 
 for expected_file in \
   bug-fixer.toml \
+  compound-curator.toml \
   compound-learner.toml \
   data-layer.toml \
   design-reviewer.toml \
@@ -177,15 +188,29 @@ for expected_file in \
   require_path "$ROOT/.codex/agents/$expected_file"
 done
 
+set +e
+contract_output="$("$python_cmd" "$ROOT/scripts/verify-agent-contracts.py" "$ROOT" 2>&1)"
+contract_status=$?
+set -e
+if [ "$contract_status" -ne 0 ]; then
+  add_error "agent 의미 계약 검증 실패:
+$contract_output"
+fi
+
 for file in "${agent_files[@]}"; do
   base_name="$(basename "$file")"
   agent_name="${base_name%.toml}"
   require_text "$file" "^name[[:space:]]*=[[:space:]]*\"$agent_name\"" "agent name"
   require_text "$file" '^description[[:space:]]*=' "agent description"
   require_text "$file" '^developer_instructions[[:space:]]*=' "agent developer_instructions"
-  require_text "$file" '^model[[:space:]]*=[[:space:]]*"gpt-5\.5"' "agent model"
+  if expected_model="$(expected_agent_model "$base_name")"; then
+    expected_model_pattern="${expected_model//./\\.}"
+    require_text "$file" "^model[[:space:]]*=[[:space:]]*\"$expected_model_pattern\"[[:space:]]*$" "agent model"
+  else
+    add_error "알 수 없는 custom agent 파일: $base_name"
+  fi
   if expected_effort="$(expected_agent_effort "$base_name")"; then
-    require_text "$file" "^model_reasoning_effort[[:space:]]*=[[:space:]]*\"$expected_effort\"" "agent model_reasoning_effort"
+    require_text "$file" "^model_reasoning_effort[[:space:]]*=[[:space:]]*\"$expected_effort\"[[:space:]]*$" "agent model_reasoning_effort"
   else
     add_error "알 수 없는 custom agent 파일: $base_name"
   fi
@@ -204,15 +229,15 @@ while IFS= read -r skill_file; do
   require_text "$skill_file" '^description:[[:space:]]*.+' "skill description"
 done < <(find "$ROOT/.agents/skills" -name SKILL.md)
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "rg 명령을 찾지 못했습니다" >&2
-  exit 2
-fi
-
-legacy_pattern='Agent\(|Skill\(|TaskCreate|TaskList|TaskUpdate|run_in_background|CLAUDE\.md|/orchestrate|~/.claude|\.claude/settings\.json|\.claude-plugin|gpt-5\.4|gpt-5\.4-mini|model:\s*opus|opus'
+legacy_pattern='Agent\(|Skill\(|TaskCreate|TaskList|TaskUpdate|run_in_background|CLAUDE\.md|~/.claude|\.claude/settings\.json|\.claude-plugin|gpt-5\.4|gpt-5\.4-mini|model:\s*opus|opus'
 
 set +e
-legacy_output="$(rg --hidden "$legacy_pattern" "$ROOT" --glob '!scripts/verify.*' --glob '!docs/superpowers/specs/**' 2>&1)"
+if command -v rg >/dev/null 2>&1; then
+  legacy_output="$(rg --hidden "$legacy_pattern" "$ROOT" --glob '!scripts/verify.*' --glob '!docs/superpowers/specs/**' 2>&1)"
+else
+  grep_legacy_pattern='Agent\(|Skill\(|TaskCreate|TaskList|TaskUpdate|run_in_background|CLAUDE\.md|~/.claude|\.claude/settings\.json|\.claude-plugin|gpt-5\.4|gpt-5\.4-mini|model:[[:space:]]*opus|opus'
+  legacy_output="$(grep -RInE --exclude='verify.ps1' --exclude='verify.sh' --exclude-dir='.git' --exclude-dir='docs/superpowers/specs' "$grep_legacy_pattern" "$ROOT" 2>&1)"
+fi
 legacy_status=$?
 set -e
 
@@ -224,7 +249,11 @@ elif [ "$legacy_status" -gt 1 ]; then
 fi
 
 set +e
-forbidden_output="$(rg '~[/\\]\.agents[/\\]skills|\$HOME[/\\]\.agents[/\\]skills|\$env:USERPROFILE.*\.agents\\skills|\.codex[/\\]config\.toml' "$ROOT/install.ps1" "$ROOT/install.sh" 2>&1)"
+if command -v rg >/dev/null 2>&1; then
+  forbidden_output="$(rg '~[/\\]\.agents[/\\]skills|\$HOME[/\\]\.agents[/\\]skills|\$env:USERPROFILE.*\.agents\\skills|\.codex[/\\]config\.toml' "$ROOT/install.ps1" "$ROOT/install.sh" 2>&1)"
+else
+  forbidden_output="$(grep -nE '~[/\\]\.agents[/\\]skills|\$HOME[/\\]\.agents[/\\]skills|\$env:USERPROFILE.*\.agents\\skills|\.codex[/\\]config\.toml' "$ROOT/install.ps1" "$ROOT/install.sh" 2>&1)"
+fi
 forbidden_status=$?
 set -e
 

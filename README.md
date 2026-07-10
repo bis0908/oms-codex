@@ -4,6 +4,8 @@
 
 OMS Codex는 Codex용 custom agent 팀 하네스를 로컬 플러그인으로 배포하기 위한 저장소이다. 플러그인 매니페스트, marketplace 항목, custom agent 정의, skill, 설치 스크립트를 같은 루트에서 관리한다.
 
+현재 하네스는 14개 custom agent를 제공한다. 반복 사례 추가는 `compound-learner`, 누적 사례 무손실 정리는 `compound-curator`가 분리 담당한다.
+
 ## 구조
 
 ```text
@@ -63,6 +65,8 @@ codex plugin marketplace list
 
 수동 검증 시에는 `.codex-plugin/plugin.json`과 `.agents/plugins/marketplace.json`을 JSON으로 파싱하고, `install.ps1` 및 `install.sh`의 구문 검사를 실행한다. 설치 후에는 `codex plugin marketplace list`에서 `oms-codex-local` marketplace가 보이는지 확인한다.
 
+검증 스크립트는 agent별 model/effort, 공통 반환 계약, phase/발신자 상태 전이, security 학습 트리거와 필수 게이트 정책도 확인한다.
+
 ## 사용
 
 Codex에서 marketplace를 갱신한 뒤 OMS Codex 플러그인을 설치한다. 설치된 custom agent와 skill은 Codex 작업 흐름에서 사용할 수 있다.
@@ -72,6 +76,8 @@ Codex에서 marketplace를 갱신한 뒤 OMS Codex 플러그인을 설치한다.
 ```text
 $orchestrate <작업>
 ```
+
+프로젝트 초기화 시 보안 path/keyword manifest, 시각 전용 manifest, 일반 구현 역할 override, 커밋 정책을 `AGENTS.md`에 기록한다. 커밋 정책이 없으면 `ask`로 처리하며, 필수 구현·검증 agent가 재실패하면 완료 경로를 중단한다.
 
 ## 범위
 
