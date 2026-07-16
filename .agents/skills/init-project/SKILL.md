@@ -74,19 +74,20 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 ### 3.0 실행 프로필 선택과 적용
 
-실행 프로필은 현재 플러그인 번들의 `references/agent-profiles.json`을 정본으로 사용한다. source agent TOML은 `performance` 프로필과 일치해야 하며, 대상 프로젝트에는 선택된 프로필의 모델·effort만 적용한다.
+실행 프로필은 현재 플러그인 번들의 `references/agent-profiles.json`을 정본으로 사용한다. source agent TOML은 기본 `balanced` 프로필과 일치해야 하며, 대상 프로젝트에는 선택된 프로필의 모델·effort만 적용한다.
 
 최초 초기화에서 대상 `AGENTS.md`의 `## oms-codex 운영`에 유효한 `에이전트 실행 프로필` 기록이 없으면, 파일을 만들거나 하네스를 설치하기 전에 다음 선택을 요청한다.
 
 ```text
 OMS Codex 실행 프로필을 선택해 주세요.
-1. performance: 직접 구현·전문 검수에 Sol을 선택적으로 사용
-2. economy: data-layer, evaluator, security-auditor만 Sol 유지; page-builder와 일반 작업은 Terra
-3. low-cost: 필수 역할은 Terra/xhigh, 단순 상태·세션 작업은 Luna/medium
+1. balanced: 기본 권장. 구현·고위험 판단은 Sol, 규칙 기반 검수·학습은 Terra, 정형 상태 작업은 Luna
+2. performance: 직접 구현·전문 검수에 Sol을 선택적으로 사용
+3. economy: data-layer, evaluator, security-auditor만 Sol 유지; page-builder와 일반 작업은 Terra
+4. low-cost: 필수 역할은 Terra/xhigh, 단순 상태·세션 작업은 Luna/medium
 ```
 
-- 사용자가 1·2·3 또는 대응하는 profile ID를 선택하지 않으면 `결과: needs-input`으로 종료한다. 이 경우 `.codex/agents/`, `.agents/skills/`, `AGENTS.md`를 생성·수정하지 않는다.
-- 기존 `AGENTS.md`에 `performance`, `economy`, `low-cost` 중 하나가 기록돼 있으면 이를 유지한다. 프로필 변경은 사용자가 새 선택을 명시했을 때만 수행한다.
+- 사용자가 1·2·3·4 또는 대응하는 profile ID를 선택하지 않으면 `결과: needs-input`으로 종료한다. 이 경우 `.codex/agents/`, `.agents/skills/`, `AGENTS.md`를 생성·수정하지 않는다.
+- 기존 `AGENTS.md`에 `balanced`, `performance`, `economy`, `low-cost` 중 하나가 기록돼 있으면 이를 유지한다. 프로필 변경은 사용자가 새 선택을 명시했을 때만 수행한다.
 - 기록값이 없거나 유효하지 않은데 대상 agent TOML이 이미 있으면 값을 추측하지 않고 `확인 필요`로 보고한다.
 - 일반 설치 또는 갱신으로 대상 agent TOML을 준비한 뒤, 현재 플러그인 번들의 source agents와 대상 agent 디렉터리를 사용해 다음 helper를 실행한다.
 
@@ -94,7 +95,7 @@ OMS Codex 실행 프로필을 선택해 주세요.
 python <현재 플러그인>/.agents/skills/init-project/references/apply-agent-profile.py \
   --source-agents <현재 플러그인>/.codex/agents \
   --target-agents .codex/agents \
-  --profile <performance|economy|low-cost>
+  --profile <balanced|performance|economy|low-cost>
 ```
 
 - helper는 source와 target이 `model`, `model_reasoning_effort` 외에는 동일할 때만 해당 두 필드를 원자적으로 바꾼다. 다른 사용자 변경이 있으면 덮어쓰지 않고 `충돌 보류`로 기록한다.
@@ -126,7 +127,7 @@ python <현재 플러그인>/.agents/skills/init-project/references/apply-agent-
 
 ### 에이전트 실행 프로필
 
-- 선택: `<performance | economy | low-cost>`
+- 선택: `<balanced | performance | economy | low-cost>`
 - 선택 근거: `<사용자 최초 선택 | 사용자 명시 변경 | 기존 기록 유지>`
 - 프로필 정본: `.agents/skills/init-project/references/agent-profiles.json`
 

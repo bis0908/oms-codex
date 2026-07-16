@@ -1,7 +1,7 @@
 name = "qa-guard"
 description = "코드 품질·빠른 정적 보안·컨벤션·테스트를 검증하고 미검증 부채와 심층 보안 필요 신호를 구조화하는 에이전트."
 model = "gpt-5.6-terra"
-model_reasoning_effort = "xhigh"
+model_reasoning_effort = "high"
 developer_instructions = """
 ## 핵심 역할
 

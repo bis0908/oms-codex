@@ -31,7 +31,7 @@ AGENT_SKILLS = {
 
 PROFILE_PATH = pathlib.Path(".agents/skills/init-project/references/agent-profiles.json")
 PROFILE_HELPER_PATH = pathlib.Path(".agents/skills/init-project/references/apply-agent-profile.py")
-PROFILE_NAMES = {"performance", "economy", "low-cost"}
+PROFILE_NAMES = {"balanced", "performance", "economy", "low-cost"}
 ALLOWED_MODELS = {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}
 ALLOWED_EFFORTS = {"medium", "high", "xhigh"}
 
@@ -150,8 +150,8 @@ def load_profile_policy(errors: list[str]) -> dict[str, tuple[str, str, str | No
 
     if data.get("schema_version") != 1:
         errors.append("agent profile schema_version 불일치")
-    if data.get("default_profile") != "performance":
-        errors.append("agent profile 기본값은 performance여야 합니다")
+    if data.get("default_profile") != "balanced":
+        errors.append("agent profile 기본값은 balanced여야 합니다")
 
     profiles = data.get("profiles")
     if not isinstance(profiles, dict) or set(profiles) != PROFILE_NAMES:
@@ -187,13 +187,13 @@ def load_profile_policy(errors: list[str]) -> dict[str, tuple[str, str, str | No
             if effort not in ALLOWED_EFFORTS:
                 errors.append(f"agent profile effort 불일치: {profile_name}/{agent_name}: {effort!r}")
 
-    performance = parsed.get("performance")
-    if performance is None:
+    default_profile = parsed.get("balanced")
+    if default_profile is None:
         return {}
     return {
         agent_name: (
-            performance[agent_name]["model"],
-            performance[agent_name]["model_reasoning_effort"],
+            default_profile[agent_name]["model"],
+            default_profile[agent_name]["model_reasoning_effort"],
             AGENT_SKILLS[agent_name],
         )
         for agent_name in sorted(expected_agents)
@@ -217,7 +217,7 @@ def verify_profile_application(errors: list[str]) -> None:
     with tempfile.TemporaryDirectory(prefix="oms-codex-profile-") as temp_dir:
         target_agents = pathlib.Path(temp_dir) / "agents"
         shutil.copytree(source_agents, target_agents)
-        for profile_name in ("performance", "economy", "low-cost"):
+        for profile_name in ("balanced", "performance", "economy", "low-cost"):
             command = [
                 sys.executable,
                 str(helper_path),

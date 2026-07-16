@@ -13,11 +13,11 @@ if (-not (Test-Path -LiteralPath $profileManifestPath -PathType Leaf)) {
 else {
     try {
         $profileManifest = Get-Content -LiteralPath $profileManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($profileManifest.schema_version -ne 1 -or $profileManifest.default_profile -ne "performance") {
+        if ($profileManifest.schema_version -ne 1 -or $profileManifest.default_profile -ne "balanced") {
             [void]$errors.Add("agent profile 기본 설정 불일치")
         }
 
-        foreach ($profileName in @("performance", "economy", "low-cost")) {
+        foreach ($profileName in @("balanced", "performance", "economy", "low-cost")) {
             $profile = $profileManifest.profiles.$profileName
             if ($null -eq $profile -or $null -eq $profile.agents) {
                 [void]$errors.Add("agent profile 누락: $profileName")
@@ -35,9 +35,9 @@ else {
             }
         }
 
-        $performanceAgents = $profileManifest.profiles.performance.agents
-        if ($null -ne $performanceAgents) {
-            foreach ($agent in $performanceAgents.PSObject.Properties) {
+        $defaultAgents = $profileManifest.profiles.balanced.agents
+        if ($null -ne $defaultAgents) {
+            foreach ($agent in $defaultAgents.PSObject.Properties) {
                 $fileName = "$($agent.Name).toml"
                 $agentModelPolicy[$fileName] = $agent.Value.model
                 $agentEffortPolicy[$fileName] = $agent.Value.model_reasoning_effort
@@ -140,7 +140,7 @@ Forbid-Path ".codex-plugin"
 Forbid-Path ".agents\plugins"
 
 $version = Get-RequiredText "VERSION"
-if ($null -ne $version -and $version.Trim() -ne "1.1.2") {
+if ($null -ne $version -and $version.Trim() -ne "1.1.3") {
     Add-ErrorMessage "VERSION 불일치: $($version.Trim())"
 }
 
@@ -274,7 +274,7 @@ else {
 
 Require-Text "README.md" 'install\.ps1 -Target' "README install.ps1 target"
 Require-Text "README.md" 'install\.sh --target' "README install.sh target"
-Require-Text "README.md" 'OMS Codex 1\.1\.2' "README version"
+Require-Text "README.md" 'OMS Codex 1\.1\.3' "README version"
 Require-Text "install.ps1" '\[string\]\$Target' "install.ps1 target parameter"
 Require-Text "install.sh" -- '--target\)' "install.sh target parameter"
 

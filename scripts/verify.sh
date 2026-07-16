@@ -48,7 +48,7 @@ for path in \
 done
 
 version="$(tr -d '\r\n' < "$ROOT/VERSION")"
-[ "$version" = "1.1.2" ] || add_error "VERSION 불일치: $version"
+[ "$version" = "1.1.3" ] || add_error "VERSION 불일치: $version"
 
 for path in "$ROOT/.codex-plugin" "$ROOT/.agents/plugins"; do
   if [ -e "$path" ]; then
@@ -80,10 +80,10 @@ try:
     profile_data = json.loads(
         (root / ".agents/skills/init-project/references/agent-profiles.json").read_text(encoding="utf-8")
     )
-    if profile_data.get("schema_version") != 1 or profile_data.get("default_profile") != "performance":
+    if profile_data.get("schema_version") != 1 or profile_data.get("default_profile") != "balanced":
         errors.append("agent profile 기본 설정 불일치")
     profiles = profile_data.get("profiles", {})
-    expected_profiles = {"performance", "economy", "low-cost"}
+    expected_profiles = {"balanced", "performance", "economy", "low-cost"}
     if set(profiles) != expected_profiles:
         errors.append(f"agent profile 목록 불일치: {sorted(profiles)}")
     expected_agents = {path.stem for path in (root / ".codex/agents").glob("*.toml")}
@@ -107,15 +107,15 @@ try:
 except Exception as exc:
     errors.append(f"tomllib import 실패: {exc}")
 else:
-    performance_agents = profile_data.get("profiles", {}).get("performance", {}).get("agents", {})
+    default_agents = profile_data.get("profiles", {}).get("balanced", {}).get("agents", {})
     for path in sorted((root / ".codex/agents").glob("*.toml")):
         try:
             agent_data = tomllib.loads(path.read_text(encoding="utf-8"))
-            expected = performance_agents.get(path.stem, {})
+            expected = default_agents.get(path.stem, {})
             if agent_data.get("model") != expected.get("model"):
-                errors.append(f"agent performance model 불일치: {path.name}")
+                errors.append(f"agent balanced model 불일치: {path.name}")
             if agent_data.get("model_reasoning_effort") != expected.get("model_reasoning_effort"):
-                errors.append(f"agent performance effort 불일치: {path.name}")
+                errors.append(f"agent balanced effort 불일치: {path.name}")
         except Exception as exc:
             errors.append(f"{path}: {exc}")
 
@@ -231,7 +231,7 @@ fi
 
 require_text "$ROOT/README.md" 'install\.ps1 -Target' "README install.ps1 target"
 require_text "$ROOT/README.md" 'install\.sh --target' "README install.sh target"
-require_text "$ROOT/README.md" 'OMS Codex 1\.1\.2' "README version"
+require_text "$ROOT/README.md" 'OMS Codex 1\.1\.3' "README version"
 require_text "$ROOT/install.ps1" '\[string\]\$Target' "install.ps1 target parameter"
 require_text "$ROOT/install.sh" '--target\)' "install.sh target parameter"
 
