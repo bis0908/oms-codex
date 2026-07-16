@@ -103,6 +103,11 @@ REQUIRED_TEXT = {
         "plan-remediation",
         "auth/session: QA -> security(필수) -> evaluator",
     ),
+    ".agents/skills/design-review/SKILL.md": (
+        "먼저 browser-use 도구로 대상 URL을 열어 직접 조작",
+        "사용자가 직접 확인할 URL, viewport, 조작 순서, 기대 결과",
+        "사용자 확인 전까지 해당 항목은 `미확인`, 결과는 `needs-input`",
+    ),
     ".agents/skills/compound/SKILL.md": ("security-repeat", "compound-curator"),
     ".agents/skills/tdd/SKILL.md": ("red-confirmed", "red-blocked"),
     ".agents/skills/milestone-track/SKILL.md": ("사용자 검증", "phase-5-complete", "plan-remediation"),
@@ -282,6 +287,16 @@ def main() -> int:
             continue
         if name not in policy:
             continue
+
+        if name == "design-reviewer":
+            features = data.get("features")
+            required_browser_features = ("computer_use", "browser_use", "in_app_browser")
+            if not isinstance(features, dict):
+                errors.append("design-reviewer.toml browser-use features 누락")
+            else:
+                for feature in required_browser_features:
+                    if features.get(feature) is not True:
+                        errors.append(f"design-reviewer.toml browser-use feature 비활성: {feature}")
 
         expected_model, expected_effort, skill = policy[name]
         if data.get("model") != expected_model:
