@@ -32,6 +32,18 @@ auth/session: QA -> security(필수) -> evaluator
 
 보완으로 변경된 파일은 변경 종류에 맞는 상류 게이트부터 다시 실행한다. design 자동 수정 파일도 QA와 evaluator 입력에 합친다.
 
+### 감사 모드 진단 연속성
+
+`UI 검증 모드: audit`에서는 구현 완료가 아니라 전체 결함 분류가 목적이다.
+선호 UI 도구가 없어도 [ui-verification-fallback.md](ui-verification-fallback.md)의
+대체 증거를 사용한다. 상류 게이트가 `수정필요`이거나 폴백으로도 남은
+미확인이 있더라도 보고서를 정확한 request ID로 연결해 QA, 조건부 security,
+evaluator까지 진단 순서를 계속할 수 있다.
+
+이 예외는 evaluator approved, tracker 완료 전이, 커밋에는 적용하지 않는다.
+blocking 항목이나 미확인이 있으면 최종 결과는 `수정필요`이고 구현 완료로
+전이하지 않는다.
+
 ## 3. 보안 Manifest
 
 프로젝트 `AGENTS.md`에 아래 세트를 선언한다.

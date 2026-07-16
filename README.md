@@ -2,7 +2,7 @@
 
 ## 개요
 
-OMS Codex 1.1.3은 Codex용 custom agent 팀 하네스를 **프로젝트 로컬 설치 템플릿**으로 배포하기 위한 저장소이다. 버전 정본은 루트의 `VERSION` 파일이다. custom agent 정의, skill, 대상 프로젝트 설치 스크립트를 같은 루트에서 관리한다. Marketplace 플러그인으로 등록하지 않으므로 전역 플러그인 skill과 프로젝트 skill이 중복 노출되지 않는다.
+OMS Codex 1.1.4는 Codex용 custom agent 팀 하네스를 **프로젝트 로컬 설치 템플릿**으로 배포하기 위한 저장소이다. 버전 정본은 루트의 `VERSION` 파일이다. custom agent 정의, skill, 대상 프로젝트 설치 스크립트를 같은 루트에서 관리한다. Marketplace 플러그인으로 등록하지 않으므로 전역 플러그인 skill과 프로젝트 skill이 중복 노출되지 않는다.
 
 현재 하네스는 14개 custom agent를 제공한다. 반복 사례 추가는 `compound-learner`, 누적 사례 무손실 정리는 `compound-curator`가 분리 담당한다.
 
@@ -71,6 +71,12 @@ bash scripts/verify.sh
 수동 검증 시에는 `install.ps1` 및 `install.sh`의 구문 검사를 실행하고, 빈 임시 프로젝트에 설치한 뒤 `.codex/agents/`와 `.agents/skills/`의 파일 수를 원본과 비교한다.
 
 검증 스크립트는 네 실행 프로필의 agent별 model/effort, 기본 `balanced` agent TOML, 공통 반환 계약, phase/발신자 상태 전이, security 학습 트리거와 필수 게이트 정책도 확인한다.
+
+UI 검증은 특정 브라우저 도구를 합격 조건으로 고정하지 않는다. 연결된 UI
+도구를 우선 사용하되, 사용할 수 없으면 기존 E2E, production 컴포넌트 런타임
+테스트, HTTP·통합 테스트, 사용자 관찰을 요구사항별로 조합한다. `audit` 모드는
+미확인 항목을 포함한 진단 보고서 작성을 계속할 수 있지만, 필수 증거가 없는
+상태에서 evaluator 승인·완료 전이·커밋을 허용하지 않는다.
 
 ## 사용
 

@@ -140,7 +140,7 @@ Forbid-Path ".codex-plugin"
 Forbid-Path ".agents\plugins"
 
 $version = Get-RequiredText "VERSION"
-if ($null -ne $version -and $version.Trim() -ne "1.1.3") {
+if ($null -ne $version -and $version.Trim() -ne "1.1.4") {
     Add-ErrorMessage "VERSION 불일치: $($version.Trim())"
 }
 
@@ -274,7 +274,7 @@ else {
 
 Require-Text "README.md" 'install\.ps1 -Target' "README install.ps1 target"
 Require-Text "README.md" 'install\.sh --target' "README install.sh target"
-Require-Text "README.md" 'OMS Codex 1\.1\.3' "README version"
+Require-Text "README.md" 'OMS Codex 1\.1\.4' "README version"
 Require-Text "install.ps1" '\[string\]\$Target' "install.ps1 target parameter"
 Require-Text "install.sh" -- '--target\)' "install.sh target parameter"
 

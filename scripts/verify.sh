@@ -48,7 +48,7 @@ for path in \
 done
 
 version="$(tr -d '\r\n' < "$ROOT/VERSION")"
-[ "$version" = "1.1.3" ] || add_error "VERSION 불일치: $version"
+[ "$version" = "1.1.4" ] || add_error "VERSION 불일치: $version"
 
 for path in "$ROOT/.codex-plugin" "$ROOT/.agents/plugins"; do
   if [ -e "$path" ]; then
@@ -231,7 +231,7 @@ fi
 
 require_text "$ROOT/README.md" 'install\.ps1 -Target' "README install.ps1 target"
 require_text "$ROOT/README.md" 'install\.sh --target' "README install.sh target"
-require_text "$ROOT/README.md" 'OMS Codex 1\.1\.3' "README version"
+require_text "$ROOT/README.md" 'OMS Codex 1\.1\.4' "README version"
 require_text "$ROOT/install.ps1" '\[string\]\$Target' "install.ps1 target parameter"
 require_text "$ROOT/install.sh" '--target\)' "install.sh target parameter"
 

@@ -13,7 +13,7 @@
 
 | ID | Given | When | Then |
 |---|---|---|---|
-| POS-01 | UI task의 목표, 범위, 완료 기준, task/checklist ID가 있고 프론트 구현 역할이 배정됐다. | `page-builder`가 구현을 완료한다. | `design-reviewer -> qa-guard -> security-auditor(고위험일 때) -> evaluator` 순서로 검증하고, evaluator approved 후 사용자 시각·기능 검증을 요청한다. 사용자 검증 통과 전에는 tracker 완료 전이와 커밋을 하지 않는다. |
+| POS-01 | UI task의 목표, 범위, 완료 기준, task/checklist ID가 있고 프론트 구현 역할이 배정됐다. 선호 UI 도구는 사용 가능하거나 폴백이 허용됐다. | `page-builder`가 구현을 완료하거나 audit 요청이 시작된다. | 선호 도구가 없으면 한 번의 가용성 확인 후 E2E → 컴포넌트 런타임 → HTTP·정적 추적 → 사용자 관찰 순으로 전환하고 `design-reviewer -> qa-guard -> security-auditor(고위험일 때) -> evaluator` 진단을 계속한다. 등가 증거가 없는 항목은 `?`로 남기며, evaluator approved와 사용자 검증 통과 전에는 tracker 완료 전이와 커밋을 하지 않는다. |
 | POS-02 | 데이터·API task에 격리 test DB 또는 transaction fixture가 준비됐다. | `tdd-agent`가 목표 assertion 실패를 확인한다. | `Red 상태: red-confirmed`를 받은 뒤에만 `data-layer`가 Green 구현을 시작하고, `qa-guard -> security-auditor(고위험일 때) -> evaluator`를 통과한 뒤 non-UI 완료 전이를 요청한다. |
 | POS-03 | 버그 해결에 새 쿠키, 토큰, 세션 또는 인증 메커니즘 설계가 필요하다. | `bug-fixer` 진단 결과가 auth/session 신규 설계로 분류된다. | 단발 버그 경로를 종료하고 정규 TDD·구현 경로로 합류한다. 검증 순서는 `qa-guard -> security-auditor(필수) -> evaluator`이며 security를 생략하지 않는다. |
 | POS-04 | 증상이 색상·간격·타이포 같은 순수 시각 결함이고 모든 수정 파일이 시각 전용 manifest에 포함된다. | `bug-fixer`가 최소 수정과 검증 증거를 반환한다. | evaluator를 스킵할 수 있지만 사용자 시각 검증 통과 전에는 수정 확정, 학습 acknowledgement, 완료 전이를 하지 않는다. 클릭·상태·조건부 렌더가 섞이면 이 시나리오가 아니라 기능형 evaluator 경로를 사용한다. |
@@ -39,10 +39,12 @@
 | NEG-11 | 일반 component 파일 안의 클릭, 상태 전환, 조건부 렌더 또는 데이터 표시 버그다. | 수정 경로가 동작 레이어 prefix와 매칭되지 않는다. | 기능형 증상을 우선하여 evaluator를 실행한다. component/style 경로라는 이유만으로 순수 시각 스킵을 적용하지 않는다. |
 | NEG-12 | 결정 문서, 일반 스크립트 또는 인프라 task에 프로젝트 구현 override가 없다. | 역할을 자동 선택한다. | `data-layer`에 임의 배정하지 않는다. 오케스트레이터가 직접 수행하거나 역할 확인을 요청한다. |
 | NEG-13 | curator가 `completed`를 반환했지만 acknowledgement의 대상 ID가 inflight ID와 다르거나 ID가 없다. | 큐 항목 제거를 시도한다. | pending/inflight 항목을 유지하고 계약 재전송을 요구한다. 결과 상태만으로 항목을 삭제하지 않는다. |
-| NEG-14 | security 결과가 `inconclusive`이거나 evaluator에 blocking `△`, `✗`, `⚠`, `?`가 남았다. | 다음 게이트 또는 완료 전이를 요청한다. | approved로 취급하지 않고 `blocked`, `needs-input` 또는 `수정필요`로 되돌린다. 검증 부채 기록만으로 필수 미검증을 통과시키지 않는다. |
+| NEG-14 | security 결과가 `inconclusive`이거나 evaluator에 blocking `△`, `✗`, `⚠`, `?`가 남았다. | 다음 게이트 또는 완료 전이를 요청한다. | 감사 모드에서는 남은 진단 게이트와 보고서 작성만 계속할 수 있다. approved, tracker 완료 전이, 커밋은 금지하고 `blocked`, `needs-input` 또는 `수정필요`로 판정한다. 검증 부채 기록만으로 필수 미검증을 통과시키지 않는다. |
 
 ## 정적 검증 포인트
 
 - verifier는 정상 시나리오 8개와 부정 시나리오 14개의 연속 ID가 각각 정확히 한 번 존재하는지 확인한다.
 - 모델 정책은 `agent-profiles.json`의 네 profile ID를 모두 검증하고, 기본 source agent TOML이 `balanced` 프로필과 일치함을 포함한다.
 - agent 수 14와 skill 수 13을 별도로 검사한다. `compound-learner`와 `compound-curator`는 `compound` skill을 공유한다.
+- POS-01은 선호 UI 도구 실패가 감사 중단이 아니라 폴백 전환으로 이어지는지,
+  NEG-14는 폴백이 완료 승인 우회로 사용되지 않는지 함께 검증한다.

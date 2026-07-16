@@ -32,6 +32,7 @@ description: 마일스톤 구현, 업데이트, 보완, 리팩토링, 버그 수
 - 모든 에이전트 호출: [agent-contract.md](references/agent-contract.md)
 - 마일스톤·버그·리팩토링 게이트: [pipeline-gates.md](references/pipeline-gates.md)
 - 실패·재시도·비동기 작업·커밋: [durable-work.md](references/durable-work.md)
+- UI 검증 수단 선택·폴백: [ui-verification-fallback.md](references/ui-verification-fallback.md)
 - 입력 분기 상세와 compound 건강 질의: [input-branch-paths.md](references/input-branch-paths.md)
 - stuck 임계와 안정 키: [error-handling.md](references/error-handling.md)
 - 회귀 드라이런: [test-scenarios.md](references/test-scenarios.md)
@@ -72,6 +73,12 @@ description: 마일스톤 구현, 업데이트, 보완, 리팩토링, 버그 수
 - `목표`, `범위`, `완료 기준`을 채울 정본이 없다.
 - 요청 범위와 기존 변경이 충돌해 안전한 분리가 불가능하다.
 - 필수 MCP·도구가 없고 대체 경로도 허용되지 않는다.
+
+특정 UI 도구의 부재만으로 중단하지 않는다. 선호 도구는 한 번만 가용성을
+확인하고 실패하면 [ui-verification-fallback.md](references/ui-verification-fallback.md)의
+다음 수단으로 즉시 전환한다. 감사·전수 검토 요청은 확보 가능한 증거를 모두
+수집해 진단 보고서를 완성하며, 미확인 항목은 구현 완료가 아니라 검증 범위
+한계로 분리한다.
 
 ## 입력 분기
 
@@ -144,11 +151,24 @@ design-reviewer(UI일 때)
 
 각 호출에는 직전 산출물의 정확한 경로와 `request_id`를 전달한다. `latest glob`으로 다른 scope 보고서를 선택하지 않는다.
 
+UI를 확인하는 모든 agent의 작업 봉투에는 `UI 검증 모드`, `선호 UI 검증
+수단`, `대체 검증 허용`, URL, viewport, 재현 시나리오를 명시한다. 특정 도구를
+필수로 고정하지 않고 [ui-verification-fallback.md](references/ui-verification-fallback.md)의
+증거 등가표에 따라 실제 사용 가능한 수단을 선택한다.
+
+감사 모드에서는 상류 게이트의 `수정필요`나 도구 한계 때문에 남은 `미확인`을
+숨기지 않은 채 나머지 진단 게이트를 계속 실행한다. 이는 완료 승인이 아니라
+최종 evaluator가 전체 결함과 검증 부채를 한 보고서로 판정하게 하기 위한
+예외다. 구현 완료·tracker 전이·커밋에는 정규 승인 조건을 그대로 적용한다.
+
 ### Design
 
 - 프론트 구현이 있으면 실행한다.
 - 자동 수정 파일도 이후 QA와 evaluator 범위에 포함한다.
-- 필수 런타임 항목을 확인하지 못하면 `blocked` 또는 `needs-input`이며 approved로 취급하지 않는다.
+- 선호 도구가 없으면 컴포넌트 런타임·HTTP·정적 분석·사용자 확인 폴백을
+  수행한다. 모든 기준이 등가 증거로 확인된 경우에만 approved다.
+- 감사 모드에서 일부 기준이 끝내 미확인이면 보고서를 `수정필요`로 완성하고
+  다음 진단 게이트로 진행하되, 구현 완료 신호로 사용하지 않는다.
 
 ### QA
 
@@ -168,7 +188,9 @@ auth/session 신규 설계는 항상 실행한다. `inconclusive`는 approved가
 
 - blocking `△`, `✗`, `⚠`, `?`가 하나라도 있으면 `수정필요` 또는 `blocked`다.
 - 승인된 `◐ 의도적 제외`만 blocking이 아니며 최종 사용자 보고에 다시 노출한다.
-- UI 범위는 브라우저 스모크 증거가 필요하다. 도구 부재로 필수 동작을 확인하지 못하면 approved가 아니다.
+- UI 범위는 브라우저 하나가 아니라 요구사항별 등가 런타임 증거가 필요하다.
+  정적 코드만으로 긍정 동작을 추정하지 않으며, 도구 부재 자체는 감사 중단
+  사유가 아니다. 등가 증거가 없는 항목은 `?`로 남겨 approved를 금지한다.
 
 ### 보완 재게이팅
 

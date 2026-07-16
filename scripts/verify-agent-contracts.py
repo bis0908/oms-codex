@@ -89,6 +89,8 @@ REQUIRED_TEXT = {
         "red-blocked",
         "사용자 검증: 통과",
         "commit-local",
+        "ui-verification-fallback.md",
+        "UI 검증 모드",
     ),
     ".agents/skills/orchestrate/references/durable-work.md": (
         "acknowledgement: done",
@@ -102,11 +104,39 @@ REQUIRED_TEXT = {
     ".agents/skills/orchestrate/references/pipeline-gates.md": (
         "plan-remediation",
         "auth/session: QA -> security(필수) -> evaluator",
+        "감사 모드 진단 연속성",
+        "구현 완료로",
+        "전이하지 않는다",
+    ),
+    ".agents/skills/orchestrate/references/agent-contract.md": (
+        "UI 검증 모드",
+        "선호 UI 검증 수단",
+        "대체 검증 허용",
+        "completion 모드의 필수 미검증",
+    ),
+    ".agents/skills/orchestrate/references/ui-verification-fallback.md": (
+        "`completion`",
+        "`audit`",
+        "증거 등가표",
+        "완료 전이와 커밋을 금지",
     ),
     ".agents/skills/design-review/SKILL.md": (
-        "먼저 browser-use 도구로 대상 URL을 열어 직접 조작",
-        "사용자가 직접 확인할 URL, viewport, 조작 순서, 기대 결과",
-        "사용자 확인 전까지 해당 항목은 `미확인`, 결과는 `needs-input`",
+        "검증 수단 독립",
+        "UI 검증 모드",
+        "completed + 수정필요",
+        "구현 완료 승인이 아니다",
+    ),
+    ".agents/skills/evaluate/SKILL.md": (
+        "UI 런타임·폴백 스모크 체크",
+        "등가 런타임 증거",
+        "completed + 수정필요",
+        "blocking 항목을 approved로 바꾸지 않는다",
+    ),
+    ".codex/agents/design-reviewer.toml": (
+        "UI 검증 모드",
+        "production 컴포넌트 런타임 테스트",
+        "대체 검증은 `approved`",
+        "completed + 수정필요",
     ),
     ".agents/skills/compound/SKILL.md": ("security-repeat", "compound-curator"),
     ".agents/skills/tdd/SKILL.md": ("red-confirmed", "red-blocked"),
@@ -124,6 +154,7 @@ FORBIDDEN_ACTIVE_TEXT = (
 )
 
 SCENARIO_TOKENS = {
+    "POS-01": ("폴백", "등가 증거", "사용자 검증", "커밋"),
     "NEG-01": ("blocked", "evaluator", "커밋"),
     "NEG-02": ("security-auditor", "쿠키"),
     "NEG-03": ("사용자 검증: 통과", "needs-input"),
@@ -137,7 +168,7 @@ SCENARIO_TOKENS = {
     "NEG-11": ("evaluator", "클릭"),
     "NEG-12": ("data-layer", "임의 배정"),
     "NEG-13": ("대상 ID", "pending"),
-    "NEG-14": ("inconclusive", "blocking"),
+    "NEG-14": ("inconclusive", "blocking", "감사 모드", "커밋"),
 }
 
 
@@ -290,13 +321,13 @@ def main() -> int:
 
         if name == "design-reviewer":
             features = data.get("features")
-            required_browser_features = ("computer_use", "browser_use", "in_app_browser")
+            preferred_ui_features = ("computer_use", "browser_use", "in_app_browser")
             if not isinstance(features, dict):
-                errors.append("design-reviewer.toml browser-use features 누락")
+                errors.append("design-reviewer.toml 선호 UI features 누락")
             else:
-                for feature in required_browser_features:
+                for feature in preferred_ui_features:
                     if features.get(feature) is not True:
-                        errors.append(f"design-reviewer.toml browser-use feature 비활성: {feature}")
+                        errors.append(f"design-reviewer.toml 선호 UI feature 비활성: {feature}")
 
         expected_model, expected_effort, skill = policy[name]
         if data.get("model") != expected_model:
