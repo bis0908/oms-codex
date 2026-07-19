@@ -1,5 +1,7 @@
 # 하네스 에이전트 지침 감사 보고서
 
+> 보존 상태: 역사 보고서. 2026-07-19의 GPT-5.6 lean topology 개편으로 당시 13→14 agent 구조와 model/effort 결론은 superseded되었다. 현재 정본은 `docs/model-selection-guideline.md`, `agent-profiles.json`, `topology-profiles.json`이다.
+
 ## 1. 감사 개요
 
 - 감사 일자: 2026-07-10 KST

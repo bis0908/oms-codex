@@ -1,102 +1,48 @@
-# 파이프라인 게이트
+# 적응형 파이프라인 게이트
 
-## 목차
+## 선택 원칙
 
-1. 버그 경로
-2. 정규 검증
-3. 보안 manifest
-4. 완료 전이
+게이트 수는 agent model profile이 아니라 변경 의미, 위험 클래스, 완료 판정의 종류로 선택한다.
 
-## 1. 버그 경로
+| profile | 대상 | 필수 검증 |
+|---|---|---|
+| `direct` | 정형 상태·세션 기록, 행동을 바꾸지 않는 문서 | 결정적 스크립트 또는 파서 + diff 검토 |
+| `lean` | 격리된 저위험 코드·설정 변경 | QA, 필요 시 evaluator |
+| `full` | 마일스톤, UI, 다중 모듈, auth/session, migration, payment, destructive | design(UI) → QA → security(고위험) → evaluator |
 
-```text
-bug-fixer
-  -> 기능형: evaluator
-  -> 순수 시각형 + 시각 전용 manifest 전부 매칭: 사용자 시각 검증
-  -> 신규 auth/session 설계: 정규 TDD·구현·검증으로 전환
-```
+`lean`에서 사용자 행동, 공개 계약, acceptance criteria 충족 판정이 필요하면 evaluator가 필수다. `auth | payment | migration | destructive` 위험 클래스는 항상 `full`이며 security를 생략하지 않는다.
 
-기능형 신호는 클릭, 제출, 상태 전환, 조건부 렌더, 데이터 표시, API·서버 동작, 라우팅이다. 하나라도 있으면 evaluator를 실행한다. 파일 경로가 component/style이라는 이유로 스킵하지 않는다.
+최종 완료 전이에는 선택한 profile과 실제 필수 검증을 `gate_profile`, `required_gates`, `gate_results`, `risk_class`로 기록한다. `required_gates`는 비어 있을 수 없고 결과 키와 정확히 일치해야 한다. `direct`의 결정적 검증은 `deterministic`, UI `full`의 디자인 검증은 `design`으로 기록한다.
 
-시각형 스킵은 사용자 증상이 색상·간격·타이포·비기능 레이아웃이고 변경 파일 전부가 프로젝트의 시각 전용 manifest에 있을 때만 허용한다. manifest가 없으면 evaluator를 실행한다.
-
-## 2. 정규 검증
+## 버그 경로
 
 ```text
-UI: design -> QA -> security(조건부) -> evaluator
-non-UI: QA -> security(조건부) -> evaluator
-auth/session: QA -> security(필수) -> evaluator
+orchestrator + bugfix skill
+  -> 기능형: QA + evaluator
+  -> 순수 시각형 + 시각 전용 manifest 전부 매칭: design 또는 사용자 시각 검증
+  -> 신규 auth/session 설계: data-layer Red→Green + full gate
 ```
 
-각 agent의 공통 `결과: completed`와 역할별 결과 `approved`를 모두 확인한 뒤에만 다음 게이트로 진행한다. QA·security·design이 `수정필요`이면 공통 결과가 completed여도 다음 게이트로 진행하지 않고 보완 루프로 되돌린다. `needs-input`, `blocked`, `failed`, `검증불가`, `inconclusive`도 승인 상태가 아니다.
+기능형 신호는 클릭, 제출, 상태 전환, 조건부 렌더, 데이터 표시, API·서버 동작, 라우팅이다. 파일 경로가 component/style이라는 이유로 스킵하지 않는다.
 
-보완으로 변경된 파일은 변경 종류에 맞는 상류 게이트부터 다시 실행한다. design 자동 수정 파일도 QA와 evaluator 입력에 합친다.
+## 게이트 결과
+
+각 호출의 공통 `결과: completed`와 역할별 `approved`를 모두 확인한다. `수정필요`, `needs-input`, `blocked`, `failed`, `검증불가`, `inconclusive`는 승인 상태가 아니다.
+
+보완 파일은 변경 의미에 맞는 상류 게이트부터 다시 검증한다. design 자동 수정 파일도 QA와 evaluator 범위에 포함한다.
 
 ### 감사 모드 진단 연속성
 
-`UI 검증 모드: audit`에서는 구현 완료가 아니라 전체 결함 분류가 목적이다.
-선호 UI 도구가 없어도 [ui-verification-fallback.md](ui-verification-fallback.md)의
-대체 증거를 사용한다. 상류 게이트가 `수정필요`이거나 폴백으로도 남은
-미확인이 있더라도 보고서를 정확한 request ID로 연결해 QA, 조건부 security,
-evaluator까지 진단 순서를 계속할 수 있다.
+`UI 검증 모드: audit`에서는 가용한 폴백 증거를 사용해 진단 보고서를 완성할 수 있다. 상류 게이트에 `수정필요`나 미확인이 남아도 다음 진단 게이트를 실행할 수 있지만, 구현 완료로 전이하지 않는다. evaluator approved, 상태 완료 전이, 커밋에는 이 예외를 적용하지 않는다.
 
-이 예외는 evaluator approved, tracker 완료 전이, 커밋에는 적용하지 않는다.
-blocking 항목이나 미확인이 있으면 최종 결과는 `수정필요`이고 구현 완료로
-전이하지 않는다.
+## 보안 manifest
 
-## 3. 보안 Manifest
+프로젝트 `AGENTS.md`의 보안 path/keyword manifest를 사용한다. manifest가 없으면 API route, server action, auth/session/permission/admin/payment/webhook/upload/delete와 개인정보 read/write를 보수적으로 security 대상으로 본다.
 
-프로젝트 `AGENTS.md`에 아래 세트를 선언한다.
+## 완료 전이
 
-```text
-보안 고위험 경로:
-- <prefix>
+상태 전이 전에는 `scripts/validate-milestone-transition.py`로 신호를 검증한다.
 
-보안 고위험 키워드:
-- auth
-- session
-- permission
-- admin
-- payment
-- webhook
-- upload
-- delete
+UI 완료에는 `작업 유형: UI`, `사용자 검증: 통과`, design·evaluator approved, task/checklist ID가 모두 필요하다. non-UI 완료에는 선택한 `required_gates` 전부의 approved와 명시적 task/checklist ID가 필요하며, evaluator를 선택한 경우에만 evaluator 원본 승인 신호와 보고서를 요구한다.
 
-시각 전용 경로:
-- <prefix>
-```
-
-manifest가 없으면 모든 API route·server action과 개인정보 read/write를 security 대상으로 본다. auth/session 신규 메커니즘은 경로와 무관하게 필수다.
-
-## 4. 완료 전이
-
-UI 완료 신호:
-
-```text
-작업 유형: UI
-사용자 검증: 통과
-검증 결과: approved
-task_id/checklist_id: <명시값>
-```
-
-non-UI 완료 신호:
-
-```text
-작업 유형: non-UI
-검증 결과: approved
-task_id/checklist_id: <명시값>
-```
-
-tracker는 phase·발신자·작업 유형 조합을 확인한다. UI에서 사용자 검증이 없거나 task/checklist ID가 모호하면 상태를 변경하지 않는다.
-
-계획 감사 보완은 별도 조합을 사용한다.
-
-```text
-단계: plan-remediation
-에이전트: orchestrator
-사용자 승인: 통과
-plan-auditor 보고서: <정확한 경로>
-task_id/checklist_id: <명시값>
-```
-
-이 조합은 계획 문구·체크리스트 정합성 수정에만 사용하며 구현 완료나 evaluator 승인을 합성하지 않는다.
+계획 감사 보완은 `plan-remediation`, orchestrator 발신, 사용자 승인, 정확한 plan-auditor 보고서와 ID가 모두 있어야 한다. 이 조합은 계획 문구에만 적용하며 구현 완료를 합성하지 않는다.

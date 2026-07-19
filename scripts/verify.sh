@@ -41,6 +41,7 @@ for path in \
   "$ROOT/install.ps1" \
   "$ROOT/install.sh" \
   "$ROOT/.agents/skills/init-project/references/agent-profiles.json" \
+  "$ROOT/.agents/skills/init-project/references/topology-profiles.json" \
   "$ROOT/.agents/skills/init-project/references/apply-agent-profile.py" \
   "$ROOT/.agents/skills" \
   "$ROOT/.codex/agents"; do
@@ -48,7 +49,7 @@ for path in \
 done
 
 version="$(tr -d '\r\n' < "$ROOT/VERSION")"
-[ "$version" = "1.1.4" ] || add_error "VERSION 불일치: $version"
+[ "$version" = "1.2.0" ] || add_error "VERSION 불일치: $version"
 
 for path in "$ROOT/.codex-plugin" "$ROOT/.agents/plugins"; do
   if [ -e "$path" ]; then
@@ -80,7 +81,7 @@ try:
     profile_data = json.loads(
         (root / ".agents/skills/init-project/references/agent-profiles.json").read_text(encoding="utf-8")
     )
-    if profile_data.get("schema_version") != 1 or profile_data.get("default_profile") != "balanced":
+    if profile_data.get("schema_version") != 2 or profile_data.get("default_profile") != "balanced":
         errors.append("agent profile 기본 설정 불일치")
     profiles = profile_data.get("profiles", {})
     expected_profiles = {"balanced", "performance", "economy", "low-cost"}
@@ -97,10 +98,24 @@ try:
             effort = values.get("model_reasoning_effort") if isinstance(values, dict) else None
             if model not in {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}:
                 errors.append(f"agent profile model 불일치: {profile_name}/{agent_name}")
-            if effort not in {"medium", "high", "xhigh"}:
+            if effort not in {"low", "medium", "high", "xhigh", "max"}:
                 errors.append(f"agent profile effort 불일치: {profile_name}/{agent_name}")
 except Exception as exc:
     errors.append(f"agent profile 검사 실패: {exc}")
+
+try:
+    topology_data = json.loads(
+        (root / ".agents/skills/init-project/references/topology-profiles.json").read_text(encoding="utf-8")
+    )
+    source_agents = {path.stem for path in (root / ".codex/agents").glob("*.toml")}
+    lean = topology_data["topologies"]["lean"]
+    full = topology_data["topologies"]["full"]
+    if set(lean["default_agents"]) | set(lean["optional_agents"]) != source_agents:
+        errors.append("lean topology agent 집합 불일치")
+    if set(full["default_agents"]) != source_agents or full["optional_agents"]:
+        errors.append("full topology agent 집합 불일치")
+except Exception as exc:
+    errors.append(f"topology profile 검사 실패: {exc}")
 
 try:
     import tomllib
@@ -139,31 +154,9 @@ else
   agent_count="0"
 fi
 
-if [ "$agent_count" != "14" ]; then
-  add_error ".codex/agents TOML 파일 수 불일치: $agent_count"
-fi
-
 shopt -s nullglob
 agent_files=("$ROOT"/.codex/agents/*.toml)
 shopt -u nullglob
-
-for expected_file in \
-  bug-fixer.toml \
-  compound-curator.toml \
-  compound-learner.toml \
-  data-layer.toml \
-  design-reviewer.toml \
-  evaluator.toml \
-  milestone-tracker.toml \
-  page-builder.toml \
-  plan-auditor.toml \
-  qa-guard.toml \
-  refactor-specialist.toml \
-  security-auditor.toml \
-  session-archivist.toml \
-  tdd-agent.toml; do
-  require_path "$ROOT/.codex/agents/$expected_file"
-done
 
 set +e
 contract_output="$("$python_cmd" "$ROOT/scripts/verify-agent-contracts.py" "$ROOT" 2>&1)"
@@ -186,8 +179,9 @@ for file in "${agent_files[@]}"; do
   done
 done
 
-skill_count="$(find "$ROOT/.agents/skills" -name SKILL.md | wc -l | tr -d '[:space:]')"
-[ "$skill_count" = "13" ] || add_error "SKILL.md 파일 수 불일치: $skill_count"
+for required_skill in bugfix compound design-review evaluate init-project milestone-track orchestrate plan-audit qa refactor security-audit session-archive tdd; do
+  require_path "$ROOT/.agents/skills/$required_skill/SKILL.md"
+done
 while IFS= read -r skill_file; do
   require_text "$skill_file" '^---' "skill frontmatter start"
   require_text "$skill_file" '^name:[[:space:]]*.+' "skill name"
@@ -231,9 +225,11 @@ fi
 
 require_text "$ROOT/README.md" 'install\.ps1 -Target' "README install.ps1 target"
 require_text "$ROOT/README.md" 'install\.sh --target' "README install.sh target"
-require_text "$ROOT/README.md" 'OMS Codex 1\.1\.4' "README version"
+require_text "$ROOT/README.md" 'OMS Codex 1\.2\.0' "README version"
 require_text "$ROOT/install.ps1" '\[string\]\$Target' "install.ps1 target parameter"
+require_text "$ROOT/install.ps1" 'Topology' "install.ps1 topology parameter"
 require_text "$ROOT/install.sh" '--target\)' "install.sh target parameter"
+require_text "$ROOT/install.sh" '--topology\)' "install.sh topology parameter"
 
 set +e
 if command -v rg >/dev/null 2>&1; then
@@ -248,6 +244,17 @@ if [ "$marketplace_status" -eq 0 ]; then
 $marketplace_output"
 elif [ "$marketplace_status" -gt 1 ]; then
   add_error "installer marketplace 검사 실패: $marketplace_output"
+fi
+
+if [ "${#errors[@]}" -eq 0 ]; then
+  set +e
+  installer_safety_output="$(bash "$ROOT/scripts/verify-installer-safety.sh" 2>&1)"
+  installer_safety_status=$?
+  set -e
+  if [ "$installer_safety_status" -ne 0 ]; then
+    add_error "Bash 설치기 안전성 검증 실패:
+$installer_safety_output"
+  fi
 fi
 
 if [ "${#errors[@]}" -gt 0 ]; then

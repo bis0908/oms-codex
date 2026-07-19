@@ -1,85 +1,65 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "default_profile": "balanced",
   "profiles": {
     "balanced": {
       "label": "균형형",
-      "description": "구현·고위험 판단은 Sol, 규칙 기반 검수·학습은 Terra, 정형 상태 작업은 Luna를 사용한다.",
+      "description": "구현·고위험 판단은 Sol, 규칙 기반 검수·온디맨드 작업은 Terra를 사용한다.",
       "agents": {
-        "bug-fixer": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
         "compound-curator": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
         "compound-learner": { "model": "gpt-5.6-terra", "model_reasoning_effort": "medium" },
         "data-layer": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
         "design-reviewer": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
         "evaluator": { "model": "gpt-5.6-sol", "model_reasoning_effort": "xhigh" },
-        "milestone-tracker": { "model": "gpt-5.6-luna", "model_reasoning_effort": "medium" },
         "page-builder": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
         "plan-auditor": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "qa-guard": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
-        "refactor-specialist": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
-        "security-auditor": { "model": "gpt-5.6-sol", "model_reasoning_effort": "xhigh" },
-        "session-archivist": { "model": "gpt-5.6-luna", "model_reasoning_effort": "medium" },
-        "tdd-agent": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" }
+        "security-auditor": { "model": "gpt-5.6-sol", "model_reasoning_effort": "xhigh" }
       }
     },
     "performance": {
       "label": "퍼포먼스",
-      "description": "직접 구현과 전문 검수에는 Sol을, 문서·상태 작업에는 Terra 또는 Luna를 사용한다.",
+      "description": "구현과 전문 검수에는 Sol을, 정형 온디맨드 작업에는 Terra를 사용한다.",
       "agents": {
-        "bug-fixer": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
         "compound-curator": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
         "compound-learner": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "data-layer": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
         "design-reviewer": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
         "evaluator": { "model": "gpt-5.6-sol", "model_reasoning_effort": "xhigh" },
-        "milestone-tracker": { "model": "gpt-5.6-luna", "model_reasoning_effort": "high" },
         "page-builder": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
         "plan-auditor": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
-        "qa-guard": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
-        "refactor-specialist": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
-        "security-auditor": { "model": "gpt-5.6-sol", "model_reasoning_effort": "xhigh" },
-        "session-archivist": { "model": "gpt-5.6-luna", "model_reasoning_effort": "high" },
-        "tdd-agent": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" }
+        "qa-guard": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
+        "security-auditor": { "model": "gpt-5.6-sol", "model_reasoning_effort": "xhigh" }
       }
     },
     "economy": {
       "label": "경제적",
-      "description": "데이터 구현·요구사항 평가·고위험 보안에만 Sol을 유지하고, 일반 작업은 Terra로 수행한다.",
+      "description": "데이터 구현·최종 평가·고위험 보안에는 Sol을 유지하고 일반 작업은 Terra로 수행한다.",
       "agents": {
-        "bug-fixer": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
-        "compound-curator": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
+        "compound-curator": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "compound-learner": { "model": "gpt-5.6-terra", "model_reasoning_effort": "medium" },
         "data-layer": { "model": "gpt-5.6-sol", "model_reasoning_effort": "high" },
-        "design-reviewer": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
+        "design-reviewer": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "evaluator": { "model": "gpt-5.6-sol", "model_reasoning_effort": "xhigh" },
-        "milestone-tracker": { "model": "gpt-5.6-luna", "model_reasoning_effort": "high" },
-        "page-builder": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
-        "plan-auditor": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
-        "qa-guard": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
-        "refactor-specialist": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
-        "security-auditor": { "model": "gpt-5.6-sol", "model_reasoning_effort": "xhigh" },
-        "session-archivist": { "model": "gpt-5.6-luna", "model_reasoning_effort": "high" },
-        "tdd-agent": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" }
+        "page-builder": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
+        "plan-auditor": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
+        "qa-guard": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
+        "security-auditor": { "model": "gpt-5.6-sol", "model_reasoning_effort": "xhigh" }
       }
     },
     "low-cost": {
-      "label": "저렴 버전",
-      "description": "필수 역할은 Terra/xhigh로 유지하고, 단순 상태·세션 작업은 Luna/medium으로 낮춘다.",
+      "label": "저비용",
+      "description": "모든 역할을 Terra로 수행하되 최종 평가와 보안은 xhigh를 유지한다.",
       "agents": {
-        "bug-fixer": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "compound-curator": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "compound-learner": { "model": "gpt-5.6-terra", "model_reasoning_effort": "medium" },
-        "data-layer": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
+        "data-layer": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "design-reviewer": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "evaluator": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
-        "milestone-tracker": { "model": "gpt-5.6-luna", "model_reasoning_effort": "medium" },
-        "page-builder": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
+        "page-builder": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "plan-auditor": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
         "qa-guard": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
-        "refactor-specialist": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" },
-        "security-auditor": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" },
-        "session-archivist": { "model": "gpt-5.6-luna", "model_reasoning_effort": "medium" },
-        "tdd-agent": { "model": "gpt-5.6-terra", "model_reasoning_effort": "high" }
+        "security-auditor": { "model": "gpt-5.6-terra", "model_reasoning_effort": "xhigh" }
       }
     }
   }

@@ -108,38 +108,11 @@ qa-guard가 "보안 심층 검토 필요"를 반환함
 - <없음 | 미검증 항목 — 사유 — 해소 조건>
 - <수정 후에도 남는 위험 또는 없음>
 
-## 표준 반환
-
-완료 항목:
-- <검토한 파일 또는 항목>
-완료 task_id: <감사 완료한 task_id 목록 또는 없음>
-
-미완료 항목:
-- <없음 또는 보안 위험 항목>
-
-확인 필요:
-- <없음 또는 외부 의존 확인 항목>
-
-검증:
-- <정적 추적·비파괴 동적 검증 증거>
-
-미검증 항목:
-- <없음 또는 inconclusive 항목과 해소 조건>
-
-다음 단계:
-- <evaluator 검증 | 담당 에이전트 보완>
-
-마일스톤: M{N}
-단계: phase-4-security
-에이전트: security-auditor
-보안 감사 결과: <approved | 수정필요 | inconclusive>
-보고서: _workspace/security_{scope}_{datetime}.md
-검증 수준: <full | static-only | partial>
-잔여 위험: <없음 | 위험과 수용 근거>
-학습 신호: <없음 | security-repeat>
-request_id: <호출 request_id>
-결과: <completed | needs-input | blocked | failed>
 ```
+
+## 반환 계약
+
+공통 키는 `orchestrate/references/agent-contract.md`를 사용한다. 역할별로 `보안 감사 결과`, `보고서`, `검증 수준`, `잔여 위험`, `학습 신호`를 추가한다.
 
 완전한 근거로 승인·수정필요를 판정했으면 `completed`, 사용자 보안 결정이나 입력이 필요하면 `needs-input`, 필수 검증 환경이 없어 `inconclusive`이면 `blocked`, 감사 실행 또는 보고서 생성이 실패하면 `failed`다. `inconclusive`를 승인으로 해석하지 않는다.
 

@@ -72,14 +72,14 @@ description: 대상 프로젝트를 oms-codex 파이프라인으로 초기화하
 
 설치 결과는 `설치됨`, `갱신됨`, `원본 부재`, `확인 필요`, `충돌 보류` 중 하나로 에이전트·스킬별로 기록한다. 프로젝트별 최적화는 기본적으로 agent TOML을 임의 수정하지 않고 `AGENTS.md`의 라우팅 정책으로 기록한다. 단, 승인된 실행 프로필의 `model`, `model_reasoning_effort` 두 필드는 3.0 절에 따라 갱신할 수 있다. 프로젝트가 이미 override agent를 갖고 있으면 보존하고 상태를 별도 기록한다.
 
-### 3.0 실행 프로필 선택과 적용
+### 3.0 model profile과 topology 선택
 
-실행 프로필은 현재 플러그인 번들의 `references/agent-profiles.json`을 정본으로 사용한다. source agent TOML은 기본 `balanced` 프로필과 일치해야 하며, 대상 프로젝트에는 선택된 프로필의 모델·effort만 적용한다.
+model profile은 `references/agent-profiles.json`, 설치 topology는 `references/topology-profiles.json`을 정본으로 사용한다. source agent TOML은 기본 `balanced`와 일치해야 하며, 대상 프로젝트에는 선택된 topology subset의 모델·effort만 적용한다.
 
 최초 초기화에서 대상 `AGENTS.md`의 `## oms-codex 운영`에 유효한 `에이전트 실행 프로필` 기록이 없으면, 파일을 만들거나 하네스를 설치하기 전에 다음 선택을 요청한다.
 
 ```text
-OMS Codex 실행 프로필을 선택해 주세요.
+OMS Codex model profile을 선택해 주세요. topology를 별도 지정하지 않으면 lean을 사용합니다.
 1. balanced: 기본 권장. 구현·고위험 판단은 Sol, 규칙 기반 검수·학습은 Terra, 정형 상태 작업은 Luna
 2. performance: 직접 구현·전문 검수에 Sol을 선택적으로 사용
 3. economy: data-layer, evaluator, security-auditor만 Sol 유지; page-builder와 일반 작업은 Terra
@@ -100,7 +100,7 @@ python <현재 플러그인>/.agents/skills/init-project/references/apply-agent-
 
 - helper는 source와 target이 `model`, `model_reasoning_effort` 외에는 동일할 때만 해당 두 필드를 원자적으로 바꾼다. 다른 사용자 변경이 있으면 덮어쓰지 않고 `충돌 보류`로 기록한다.
 - Python을 사용할 수 없으면 helper의 비교·원자성 보장을 대신할 수 없다. agent TOML을 추측해 바꾸지 말고 `확인 필요`로 보고한다.
-- helper 성공 뒤에는 같은 인자에 `--check`를 붙여 14개 대상 agent가 선택 프로필과 일치하는지 확인한다.
+- helper 성공 뒤에는 같은 인자에 `--check`를 붙여 설치된 agent subset이 선택 프로필과 일치하는지 확인한다.
 
 ## 4. AGENTS.md 생성 또는 보완
 
@@ -130,10 +130,12 @@ python <현재 플러그인>/.agents/skills/init-project/references/apply-agent-
 - 선택: `<balanced | performance | economy | low-cost>`
 - 선택 근거: `<사용자 최초 선택 | 사용자 명시 변경 | 기존 기록 유지>`
 - 프로필 정본: `.agents/skills/init-project/references/agent-profiles.json`
+- topology: `<lean | full>`
+- topology 정본: `.agents/skills/init-project/references/topology-profiles.json`
 
 | 에이전트 | 모델 | effort |
 |---|---|---|
-| `<선택 프로필의 14개 agent 각각>` | `<agent-profiles.json의 실제 값>` | `<agent-profiles.json의 실제 값>` |
+| `<설치된 topology subset의 agent 각각>` | `<agent-profiles.json의 실제 값>` | `<agent-profiles.json의 실제 값>` |
 
 ### 설치된 하네스
 
@@ -143,7 +145,6 @@ python <현재 플러그인>/.agents/skills/init-project/references/apply-agent-
 | data-layer | `.codex/agents/data-layer.toml` | <상태> |
 | evaluator | `.codex/agents/evaluator.toml` | <상태> |
 | qa-guard | `.codex/agents/qa-guard.toml` | <상태> |
-| milestone-tracker | `.codex/agents/milestone-tracker.toml` | <상태> |
 | plan-auditor | `.codex/agents/plan-auditor.toml` | <상태> |
 | compound-learner | `.codex/agents/compound-learner.toml` | <상태> |
 | compound-curator | `.codex/agents/compound-curator.toml` | <상태> |
@@ -153,9 +154,10 @@ python <현재 플러그인>/.agents/skills/init-project/references/apply-agent-
 | 작업 유형 | 우선 에이전트 | 게이트 후보 |
 |---|---|---|
 | 프론트 구현 | page-builder | design-reviewer, qa-guard |
-| 백엔드/API/데이터 구현 | data-layer | tdd-agent, security-auditor, qa-guard |
+| 백엔드/API/데이터 구현 | data-layer + tdd skill | security-auditor, qa-guard, evaluator |
 | 요구사항 검증 | evaluator | qa-guard, design-reviewer, security-auditor |
-| 계획·진행 관리 | plan-auditor, milestone-tracker | compound-learner |
+| 계획 감사 | plan-auditor(선택) 또는 오케스트레이터 | 없음 |
+| 진행 관리 | 오케스트레이터 + milestone-track + 전이 검증기 | evaluator |
 | 반복 학습 추가 | compound-learner | 없음 |
 | 누적 학습 무손실 정리 | compound-curator | 없음 |
 | 일반 코드·문서·인프라 | 프로젝트 override 또는 오케스트레이터 | qa-guard, evaluator |
@@ -295,7 +297,7 @@ python <현재 플러그인>/.agents/skills/init-project/references/apply-agent-
 - 사례가 없는데 `frontend`, `data-layer`, `evaluation`, `qa`, `design`, `bugfix`, `tdd`, `security`, `harness` 카테고리 파일을 전부 선생성
 - 반복 학습 사례를 추정해서 작성
 
-부재를 허용할 수 있으면 생성하지 않고 "첫 학습 시 compound-learner가 생성"으로 보고한다.
+부재를 허용할 수 있으면 생성하지 않고 "반복 사례와 선택 agent가 준비된 첫 학습 시 생성"으로 보고한다.
 
 ## 8. 최종 readiness 보고
 
@@ -305,10 +307,10 @@ python <현재 플러그인>/.agents/skills/init-project/references/apply-agent-
 
 - `AGENTS.md`에 oms-codex 운영 섹션이 존재한다.
 - `.codex/agents/`와 필요한 `.agents/skills/` 하네스 설치 또는 설치 불가 사유가 기록돼 있다.
-- 필수 하위 에이전트 `page-builder`, `data-layer`, `evaluator`, `qa-guard`, `milestone-tracker`, `plan-auditor`, `compound-learner`의 설치 상태가 기록돼 있다.
-- `compound-curator` 설치 상태와 append 학습/무손실 정리 역할 분리가 기록돼 있다.
+- lean core `page-builder`, `data-layer`, `design-reviewer`, `qa-guard`, `security-auditor`, `evaluator`의 설치 상태가 기록돼 있다.
+- 선택 topology에서 요구한 경우 `plan-auditor`, `compound-learner`, `compound-curator` 설치 상태와 역할 분리가 기록돼 있다.
 - 기본 구현 에이전트 `page-builder`, `data-layer`를 사용할 수 있거나, 프로젝트 override 확인 필요 항목이 명시돼 있다.
-- 유효한 실행 프로필이 기록되고 대상 14개 agent TOML의 model/effort가 해당 프로필과 일치한다.
+- 유효한 model profile과 topology가 기록되고 설치된 agent subset의 model/effort가 해당 프로필과 일치한다.
 - 프로젝트 유형별 에이전트 라우팅과 최적화 결과가 기록돼 있다.
 - 설치 검증 결과가 기록돼 있다.
 - 동작 레이어 prefix와 위험 클래스 후보가 확정 또는 보류 상태로 기록돼 있다.

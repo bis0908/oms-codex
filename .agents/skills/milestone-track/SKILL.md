@@ -1,6 +1,6 @@
 ---
 name: milestone-track
-description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬. milestone-tracker 에이전트가 사용하며, docs/progress/milestone-status.md 파일의 초기화·갱신·세션 복구 보고를 담당한다. 완료 신호 수신, 상태 파일 갱신, 새 세션 시작 시 진행 상황 요약 요청 시 이 스킬을 사용한다.
+description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬. 오케스트레이터가 결정적 전이 검증기를 통과한 신호만 docs/progress/milestone-status.md와 작업 로그에 반영한다.
 ---
 
 ## 문서 구조 (2계층)
@@ -14,7 +14,7 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
 
 **왜 분리하나**: `milestone-status.md`는 매 세션 로딩·세션 복구 보고의 기준이다. 작업기록이 체크리스트 옆에 누적되면 골격 파악이 느려지고 컨텍스트가 비대해진다. 체크리스트(무엇이 끝났나)와 작업 로그(어떻게·왜 끝났나)를 물리적으로 분리해 골격을 상수 크기로 유지한다.
 
-세션 로그와 다음 세션 인계 문서는 session-archivist가 담당한다. milestone-track은 `docs/progress/**`만 쓰며, `docs/history/**`와 `docs/handoffs/**`는 읽거나 링크할 수는 있어도 생성·수정하지 않는다.
+세션 로그와 다음 세션 인계 문서는 `session-archive` 스킬이 담당한다. milestone-track은 `docs/progress/**`만 쓰며, `docs/history/**`와 `docs/handoffs/**`는 읽거나 링크할 수는 있어도 생성·수정하지 않는다.
 
 **링크 규약**: 작업 로그 하위문서가 존재하는 마일스톤은 `## M{N}` 헤더의 마지막 체크박스 줄(또는 체크박스 소유 `###` 블록) 바로 아래에 한 줄을 둔다:
 
@@ -33,7 +33,7 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
 
 골격 파일이 존재하지 않으면 아래 "초기화 절차"를 따른다.
 
-쓰기 금지 경로: `docs/history/**`, `docs/handoffs/**` (session-archivist 소유)
+쓰기 금지 경로: `docs/history/**`, `docs/handoffs/**` (`session-archive` 스킬 소유)
 
 ---
 
@@ -80,7 +80,7 @@ description: 프로젝트의 마일스톤 체크리스트를 관리하는 스킬
 
 ## 골격 1줄 상한 (규범)
 
-골격(`milestone-status.md`)이 비대해지지 않도록, 체크박스 줄과 요약 표 셀의 길이·내용을 아래로 제한한다. milestone-tracker는 갱신하는 모든 줄에 이 규범을 적용한다.
+골격(`milestone-status.md`)이 비대해지지 않도록, 체크박스 줄과 요약 표 셀의 길이·내용을 아래로 제한한다. 오케스트레이터는 갱신하는 모든 줄에 이 규범을 적용한다.
 
 **체크박스 줄 인라인 꼬리말 — 아래만 허용:**
 
@@ -181,11 +181,21 @@ checklist_ids: <갱신 대상 체크리스트 ID 목록>
 
 필수 필드가 누락되면 `docs/progress/milestone-status.md`를 수정하지 않는다. 누락 필드와 필요한 재전송 형식을 반환한다.
 
-`phase-4-eval`에는 `검증 결과`, evaluator의 정확한 `보고서` 경로가 추가로 필수다. `phase-5-complete`에는 evaluator의 원본 승인 신호, 모든 필수 게이트 결과, `작업 유형`, orchestrator 발신이 필수다. `작업 유형: UI`이면 `사용자 검증: 통과`와 근거도 필수다. 허용 조합은 `page-builder`, `data-layer`, `bug-fixer`, `refactor-specialist` 또는 일반 작업을 직접 수행한 `orchestrator`의 `phase-3-impl`, `evaluator`의 `phase-4-eval`, `orchestrator`의 `phase-5-complete`, `orchestrator`의 `plan-remediation`뿐이며, 다른 phase/발신자 조합은 상태를 바꾸지 않고 `needs-input`으로 재전송을 요청한다.
+`phase-4-eval`에는 `검증 결과`, evaluator의 정확한 `보고서` 경로가 추가로 필수다. `phase-5-complete`에는 `gate_profile`, 중복 없는 `required_gates`, 키가 정확히 일치하는 `gate_results`, `작업 유형`, orchestrator 발신이 필수다. evaluator가 필수 게이트이면 원본 승인 신호와 정확한 보고서 경로도 필수다. `required_gates`는 비어 있을 수 없으며 `direct`는 `deterministic`, `lean`은 `qa`, `full`은 `qa`와 `evaluator`를 최소로 포함한다. UI `full`이면 `design`, 모든 UI면 `사용자 검증: 통과`와 근거도 필수다. 허용 조합은 `page-builder`, `data-layer` 또는 일반 작업·bugfix·refactor를 직접 수행한 `orchestrator`의 `phase-3-impl`, `evaluator`의 `phase-4-eval`, `orchestrator`의 `phase-5-complete`, `orchestrator`의 `plan-remediation`뿐이다.
+
+`risk_class`는 모든 전이에서 필수다. `auth | payment | migration | destructive`이면 최종 완료에 `full` profile과 `security` gate가 반드시 포함되어야 한다.
+
+문서를 수정하기 전에 전이 신호를 JSON으로 직렬화하고 다음 검증을 통과해야 한다.
+
+```text
+python scripts/validate-milestone-transition.py <transition-request.json>
+```
+
+exit code가 0이 아니면 상태 파일을 수정하지 않는다. 스크립트는 phase/발신자, 필수 ID, evaluator 승인, UI 사용자 검증, 계획 보완 승인을 결정적으로 검증한다. 오케스트레이터는 검증된 정확한 checklist ID만 문서에 적용하고 적용 후 diff를 재확인한다.
 
 ### [1단계] 구현 완료 (`phase-3-impl`)
 
-발신: 구현 에이전트
+발신: 구현 주체
 
 ```
 1. docs/progress/milestone-status.md(골격) 읽기
@@ -268,43 +278,9 @@ plan-auditor 보고서는 진단 근거일 뿐 직접 수정 권한이 아니다
 
 매칭 실패 시: `결과: needs-input`으로 오케스트레이터에 정확한 매핑 재전송을 요청한다.
 
-## 반환 형식
+## 반환 계약
 
-상태 변경 또는 확인 요청이 필요할 때 아래 형식을 사용한다.
-
-```markdown
-완료 항목:
-- <갱신한 마일스톤 항목>
-완료 task_id: <갱신한 task_id 목록 또는 없음>
-
-미완료 항목:
-- <남은 체크리스트 항목 또는 없음>
-
-확인 필요:
-- <필수 필드 누락 또는 매칭 실패 항목>
-
-검증:
-- <ID 매핑·자가검증·사용자 승인 확인 결과>
-
-미검증 항목:
-- <없음 또는 확인하지 못한 항목>
-
-다음 단계:
-- <qa-guard/evaluator/다음 마일스톤>
-
-request_id: <호출 request_id>
-결과: <completed | needs-input | blocked | failed>
-마일스톤: M{N}
-단계: <phase-3-impl | phase-4-eval | phase-5-complete | plan-remediation>
-에이전트: milestone-tracker
-상태 전이: <없음 | from -> to>
-적용 checklist_id: <없음 | ID 목록>
-작업 유형: <UI | non-UI>
-사용자 검증: <통과 | 실패 | 누락 | N/A>
-거부 사유: <없음 | 사유>
-```
-
-상태 갱신과 자가검증이 끝나면 `completed`, 필수 필드·ID·사용자 검증이 필요하면 `needs-input`, 파일 잠금·권한 등으로 정본을 읽거나 쓸 수 없으면 `blocked`, 쓰기 또는 자가검증 실패는 `failed`다.
+공통 키는 `orchestrate/references/agent-contract.md`를 한 번만 사용한다. 역할별로 `상태 전이`, `적용 checklist_id`, `작업 유형`, `사용자 검증`, `거부 사유`, 전이 검증 명령과 exit code를 추가한다. 상태 갱신과 자가검증이 끝나면 `completed`, 필수 필드·ID·사용자 검증이 필요하면 `needs-input`, 파일 잠금·권한 등으로 정본을 읽거나 쓸 수 없으면 `blocked`, 쓰기 또는 자가검증 실패는 `failed`다.
 
 ---
 

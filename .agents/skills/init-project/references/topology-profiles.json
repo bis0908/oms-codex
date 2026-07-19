@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "default_topology": "lean",
+  "topologies": {
+    "lean": {
+      "label": "기본 적응형",
+      "description": "구현과 독립 검증에 필요한 core agent만 기본 설치하고 저빈도 역할은 요청 시 추가한다.",
+      "default_agents": [
+        "data-layer",
+        "design-reviewer",
+        "evaluator",
+        "page-builder",
+        "qa-guard",
+        "security-auditor"
+      ],
+      "optional_agents": [
+        "compound-curator",
+        "compound-learner",
+        "plan-auditor"
+      ],
+      "direct_skill_modes": [
+        "bugfix",
+        "milestone-track",
+        "refactor",
+        "session-archive",
+        "tdd"
+      ],
+      "gate_policy": "작업 규모와 위험 클래스에 따라 단일 검증 또는 전체 게이트를 선택한다."
+    },
+    "full": {
+      "label": "전체 전문 검수형",
+      "description": "core와 온디맨드 agent를 모두 설치하되 각 호출은 여전히 작업 위험에 따라 조건부다.",
+      "default_agents": [
+        "compound-curator",
+        "compound-learner",
+        "data-layer",
+        "design-reviewer",
+        "evaluator",
+        "page-builder",
+        "plan-auditor",
+        "qa-guard",
+        "security-auditor"
+      ],
+      "optional_agents": [],
+      "direct_skill_modes": [
+        "bugfix",
+        "milestone-track",
+        "refactor",
+        "session-archive",
+        "tdd"
+      ],
+      "gate_policy": "마일스톤·고위험 작업에서 독립 검수 agent를 모두 사용할 수 있게 준비한다."
+    }
+  }
+}

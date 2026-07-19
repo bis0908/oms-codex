@@ -1,242 +1,166 @@
 ---
 name: orchestrate
-description: 마일스톤 구현, 업데이트, 보완, 리팩토링, 버그 수정, 계획 감사, compound 정리, 세션 인계를 에이전트 팀으로 조율한다. 구현·검증·보안·학습·추적의 상태 전이와 필수 게이트를 소유한다.
+description: 마일스톤 구현, 업데이트, 보완, 버그 수정, 리팩터링, 계획 감사, 학습 정리, 세션 인계를 작업 규모와 위험에 맞는 lean 또는 full 게이트로 조율한다.
 ---
 
 # Orchestrate
 
 ## 역할과 정본
 
-오케스트레이터는 라우팅, 작업 상태, 게이트 순서, 완료 전이를 단독 소유한다. 하위 에이전트는 부모의 task 상태나 다른 에이전트를 직접 변경하지 않고 구조화된 결과만 반환한다.
+오케스트레이터는 라우팅, 작업 상태, 게이트 순서, 완료 전이를 소유한다. 역할 경계는 다음과 같다.
 
-| 영역 | 기본 역할 |
+| 영역 | 실행 주체 |
 |---|---|
 | 프론트 구현 | `page-builder` |
-| 데이터·서비스·API 구현 | `data-layer` |
-| 일반 코드·스크립트·인프라·결정 문서 | 프로젝트 override, 없으면 오케스트레이터 직접 수행 |
-| Red 테스트 | `tdd-agent` |
-| 시각 검수 | `design-reviewer` |
+| 데이터·서비스·API 구현과 Red→Green | `data-layer` + `tdd` 스킬 |
+| 일반 코드·문서·인프라 | 프로젝트 override, 없으면 오케스트레이터 |
+| 단발 버그 | 오케스트레이터 + `bugfix` 스킬 |
+| 리팩터링 | 오케스트레이터 + `refactor` 스킬 |
+| 시각 검수 | `design-reviewer`(UI·레퍼런스가 있을 때) |
 | 기술 QA | `qa-guard` |
-| 심층 보안 | `security-auditor` |
-| 요구사항 평가 | `evaluator` |
-| 진행 추적 | `milestone-tracker` |
-| 반복 학습 | `compound-learner` |
-| 누적 학습 정리 | `compound-curator` |
+| 심층 보안 | `security-auditor`(고위험일 때) |
+| 요구사항 평가 | `evaluator`(행동·마일스톤 완료 판정일 때) |
+| 계획 감사 | `plan-auditor`(설치됨) 또는 오케스트레이터 + `plan-audit` |
+| 진행 추적 | 오케스트레이터 + `milestone-track` + 결정적 전이 검증기 |
+| 세션 기록 | 오케스트레이터 + `session-archive` |
+| 반복 학습 | 설치된 `compound-learner`(코퍼스가 있을 때) |
+| 누적 정리 | 설치된 `compound-curator`(코퍼스가 있을 때) |
 
-일반 작업을 `data-layer`에 임의 배정하지 않는다. 프로젝트 `AGENTS.md`가 구현 역할 override를 선언하면 그 이름을 우선한다.
+하위 agent는 부모 task나 다른 agent를 수정하지 않고 구조화된 결과만 반환한다. 일반 작업을 `data-layer`에 임의 배정하지 않는다.
 
 ## 필수 참조
 
-작업 유형에 맞는 파일만 읽는다.
+작업 유형에 필요한 파일만 읽는다.
 
-- 모든 에이전트 호출: [agent-contract.md](references/agent-contract.md)
-- 마일스톤·버그·리팩토링 게이트: [pipeline-gates.md](references/pipeline-gates.md)
-- 실패·재시도·비동기 작업·커밋: [durable-work.md](references/durable-work.md)
-- UI 검증 수단 선택·폴백: [ui-verification-fallback.md](references/ui-verification-fallback.md)
-- 입력 분기 상세와 compound 건강 질의: [input-branch-paths.md](references/input-branch-paths.md)
-- stuck 임계와 안정 키: [error-handling.md](references/error-handling.md)
-- 회귀 드라이런: [test-scenarios.md](references/test-scenarios.md)
+- agent 호출: [agent-contract.md](references/agent-contract.md)
+- 게이트 선택: [pipeline-gates.md](references/pipeline-gates.md)
+- 실패·재시도·커밋: [durable-work.md](references/durable-work.md)
+- UI 검증 수단: [ui-verification-fallback.md](references/ui-verification-fallback.md)
+- 계획 감사·compound 질의: [input-branch-paths.md](references/input-branch-paths.md)
+- stuck 기준: [error-handling.md](references/error-handling.md)
+- 회귀 시나리오: [test-scenarios.md](references/test-scenarios.md)
 
-## 모델 정책
+## 모델과 topology 정책
 
-모델·effort 정본은 `init-project/references/agent-profiles.json`이다. 프로필은 호출 수, 역할, 게이트 순서를 바꾸지 않고 agent TOML의 `model`, `model_reasoning_effort`만 결정한다.
+모델·effort 정본은 `init-project/references/agent-profiles.json`, 설치·라우팅 정본은 `init-project/references/topology-profiles.json`이다. 두 축을 독립 선택한다.
 
-1. 프로젝트 `AGENTS.md`에 유효한 `에이전트 실행 프로필`이 있으면 그 profile ID를 사용한다.
-2. 기록이 없지만 init-project를 아직 적용하지 않은 프로젝트에서는 플러그인 기본값 `balanced`를 사용한다.
-3. 기록값이 유효하지 않거나 대상 agent TOML이 기록된 프로필과 다르면 호출을 시작하지 않고 `needs-input`으로 반환한다. `init-project`로 프로필을 확정·검증한 뒤 다시 시작한다.
+- `lean`: core 6개만 기본 설치하고 계획 감사와 compound 역할은 요청·코퍼스가 있을 때 추가한다.
+- `full`: 9개 agent를 설치하되 모든 agent를 매 작업마다 호출하지는 않는다.
+- 모델 프로필은 `balanced | performance | economy | low-cost`다.
+- 모델·effort 변경은 호출 수나 게이트를 자동 결정하지 않는다. 작업 규모, 변경 의미, 위험 클래스와 검증 가능성이 게이트를 결정한다.
+- `medium`을 기본 기준선으로 삼고 대표 작업 평가에서 이점이 확인될 때 `high`·`xhigh`를 사용한다. `max`는 최난도 품질 우선 평가에서만 비교하며 기본값으로 사용하지 않는다.
 
-프로필 구분은 다음과 같다.
+기록된 model profile 또는 topology가 설치 상태와 불일치하면 agent 호출을 시작하지 않고 `needs-input`으로 반환한 뒤 `init-project`로 복구한다.
 
-| profile ID | 모델 배정 원칙 |
-|---|---|
-| `balanced` | 구현·고위험 판단은 Sol, 규칙 기반 검수·학습은 Terra, 정형 상태 작업은 Luna를 사용한다. |
-| `performance` | 직접 구현·전문 검수에는 Sol을 선택적으로 사용하고, 문서·상태 작업에는 Terra 또는 Luna를 사용한다. |
-| `economy` | `data-layer`, `evaluator`, `security-auditor`만 Sol을 유지한다. `page-builder`와 일반 구현·검수는 Terra를 사용한다. |
-| `low-cost` | 필수 역할은 Terra/xhigh, 단순 상태·세션 작업은 Luna/medium을 사용한다. |
+## Phase 0: 입력과 상태
 
-## Phase 0: 입력과 상태 확인
+1. 요청을 구현, 버그, 리팩터링, 계획 감사, compound, 세션 기록 중 하나로 분류한다.
+2. 목표, 범위, 완료 기준과 작업 트리를 확인한다. 기존 사용자 변경을 되돌리지 않는다.
+3. `docs/compound/harness/README.md`가 있으면 라우팅 전에 읽고, 없으면 건너뛴다.
+4. `_workspace` pending·inflight 상태는 durable-work 정책으로 복구한다.
+5. 사용 가능한 topology와 실제 설치 agent를 확인한다.
 
-1. 사용자 요청을 다음 중 하나로 분류한다.
-   - 마일스톤·기능 구현
-   - 버그 증상
-   - 리팩토링
-   - 계획 정합성 감사
-   - compound 학습 정리·건강 질의
-   - 세션 기록·재개 프롬프트
-2. 작업 트리와 진행 정본을 읽는다. 기존 사용자 변경을 되돌리지 않는다.
-3. `docs/compound/harness/README.md`가 있으면 라우팅·게이트 판단 전에 읽는다. 없으면 건너뛴다.
-4. 대상 compound 카테고리가 있으면 해당 `README.md`와 load-when에 맞는 사례만 작업 봉투에 포함한다.
-5. `_workspace`의 pending·inflight 상태를 확인하고, 중단된 작업은 [durable-work.md](references/durable-work.md)에 따라 복구한다.
+다음이면 구현하지 않는다.
 
-다음 중 하나면 구현을 시작하지 않는다.
+- 목표·범위·완료 기준을 채울 근거가 없다.
+- 기존 변경과 안전하게 분리할 수 없다.
+- 필수 MCP·도구가 없고 허용된 대체 경로도 없다.
 
-- `목표`, `범위`, `완료 기준`을 채울 정본이 없다.
-- 요청 범위와 기존 변경이 충돌해 안전한 분리가 불가능하다.
-- 필수 MCP·도구가 없고 대체 경로도 허용되지 않는다.
+## 빠른 분기
 
-특정 UI 도구의 부재만으로 중단하지 않는다. 선호 도구는 한 번만 가용성을
-확인하고 실패하면 [ui-verification-fallback.md](references/ui-verification-fallback.md)의
-다음 수단으로 즉시 전환한다. 감사·전수 검토 요청은 확보 가능한 증거를 모두
-수집해 진단 보고서를 완성하며, 미확인 항목은 구현 완료가 아니라 검증 범위
-한계로 분리한다.
+### 버그
 
-## 입력 분기
+오케스트레이터가 `bugfix` 스킬로 재현·원인·최소 수정·회귀 검증을 한 컨텍스트에서 수행한다.
 
-### 버그 증상
+- 클릭, 상태, 조건부 렌더, 데이터, API, 라우팅 증상은 evaluator 대상이다.
+- 순수 시각 증상이고 변경 파일이 시각 전용 manifest에 모두 포함될 때만 evaluator를 사용자 시각 검증으로 대체할 수 있다.
+- 새 auth/session 설계가 필요하면 단발 버그 경로를 종료하고 데이터 계층 Red→Green과 full-risk 게이트로 합류한다.
 
-일반 Phase 1~5 대신 [pipeline-gates.md](references/pipeline-gates.md)의 버그 경로를 실행한다.
+### 리팩터링
 
-- `bug-fixer`는 항상 오케스트레이터가 호출하고 공통 반환 계약을 사용한다.
-- 클릭, 상태 전환, 조건부 렌더, 데이터 표시, API 호출처럼 기능형 증상이면 경로 prefix와 무관하게 evaluator를 실행한다.
-- 순수 시각형 증상이며 변경 파일이 프로젝트의 시각 전용 manifest에 모두 포함될 때만 evaluator를 스킵하고 사용자 시각 검증으로 대체한다.
-- 새 쿠키·토큰·인증 분기를 설계해야 하면 단발 버그 경로를 종료하고 정규 TDD·구현·Phase 4로 합류한다. auth/session은 security-auditor 필수다.
-
-### 리팩토링
-
-`refactor-specialist -> qa-guard -> evaluator(공개 계약 변화 가능성이 있을 때)` 순서로 실행한다. 기준선 테스트가 없거나 동작 보존을 확인할 수 없으면 완료하지 않고 `blocked`로 반환한다.
+오케스트레이터가 `refactor` 스킬을 사용한다. 변경 전후 동일 테스트와 공개 계약 diff가 없으면 완료하지 않는다. 관찰 가능한 동작 변화가 필요하면 버그 또는 구현으로 재분류한다.
 
 ### 계획 감사
 
-`plan-auditor`를 읽기 전용으로 호출한다. 정본 수정은 결과를 확인한 뒤 `milestone-tracker`에 명시적 task/checklist ID와 함께 위임한다.
+설치된 plan-auditor를 읽기 전용으로 호출하거나 같은 스킬을 오케스트레이터가 직접 수행한다. 정본 수정은 사용자 승인 후 `milestone-track` 스킬과 `scripts/validate-milestone-transition.py`를 통과한 정확한 ID에만 적용한다.
 
-### Compound 정리
+### Compound
 
-append 학습은 `compound-learner`, 무손실 정리는 `compound-curator`만 수행한다. 온디맨드 정리는 동기 실행한다. 백그라운드 정리는 성공 acknowledgement 전까지 pending 항목을 삭제하지 않는다.
+코퍼스가 없으면 agent나 빈 카테고리를 선생성하지 않는다. append는 compound-learner, curate는 compound-curator만 수행하며 둘의 쓰기 권한을 합치지 않는다.
 
-### 세션 기록과 재개
+### 세션 기록
 
-기록 보존은 `session-archivist`를 호출한다. 재개 프롬프트는 사용자가 명시적으로 요청했거나 완료·blocked 상태에서 실제 인계가 필요할 때만 출력한다.
+오케스트레이터가 `session-archive` 스킬을 직접 사용한다. 재개 프롬프트는 사용자 요청 또는 실제 장기 인계가 있을 때만 출력한다.
 
-## Phase 1: 범위 확정
+## Phase 1: 범위와 게이트 선택
 
-1. 마일스톤 티켓, 원본 스펙, API·디자인 문서를 읽는다.
-2. 산출물을 원자 task로 분해하고 오케스트레이터 내부 상태에 `task_id`를 생성한다.
-3. 각 task에 담당 역할, 대상 파일, 완료 기준, 위험 클래스를 연결한다.
-4. 원본 대비 제외 항목은 가시적 before/after 차이와 승인 출처를 기록한다.
-5. 일반 코드·문서·인프라 task에 프로젝트 override가 없으면 오케스트레이터가 직접 수행한다.
+1. 스펙과 대상 파일을 읽고 원자 task와 task/checklist ID를 만든다.
+2. 각 task에 담당 주체, 완료 기준, 위험 클래스를 연결한다.
+3. [pipeline-gates.md](references/pipeline-gates.md)의 `direct | lean | full` 중 하나를 선택하고 이유를 기록한다.
+4. 원본 대비 제외는 before/after와 승인 출처를 기록한다.
 
-하위 에이전트가 부모 task 저장소를 갱신하도록 지시하지 않는다. 하위 에이전트는 `완료 task_id`를 반환하고, 오케스트레이터가 파일 실존·diff를 확인한 뒤 상태를 갱신한다.
+하위 agent가 상태 문서를 갱신하게 하지 않는다. 오케스트레이터가 파일·diff·증거를 확인한 뒤에만 task를 완료로 전이한다.
 
-## Phase 2: TDD
+## Phase 2: 구현
 
-데이터 접근·서비스·API 구현이 있으면 `tdd-agent`를 먼저 호출한다.
+### 데이터·서비스·API
 
-- `red-confirmed`: 목표 assertion이 구현 부재로 실패한 증거가 있을 때만 Green 구현으로 진행한다.
-- `red-blocked`: 환경·DB·도구 오류이면 구현을 시작하지 않는다. 사용자가 명시적으로 진행을 승인하면 검증 부채에 기록하고 최소 구현만 진행할 수 있다.
-- 공유 dev DB 기존 데이터를 fixture로 사용하지 않는다. 격리 test DB, transaction rollback, 고유 fixture 중 프로젝트가 지원하는 안전한 방식을 사용한다.
+data-layer가 `tdd` 스킬을 사용해 같은 컨텍스트에서 Red→Green을 수행한다.
 
-결정 문서·목업·프론트 전용 작업은 TDD를 건너뛰고 사유를 기록한다.
+- `red-confirmed`: 목표 assertion이 구현 부재로 예상 위치에서 실패한 경우만 Green 진행.
+- `red-blocked`: 환경·DB·fixture·권한 오류. 구현을 시작하지 않는다.
+- 기존 dev DB 데이터나 운영 DB를 fixture로 사용하지 않는다.
 
-## Phase 3: 구현
+### 프론트와 일반 작업
 
-1. [agent-contract.md](references/agent-contract.md)의 봉투를 담당 에이전트에 전달한다.
-2. API 의존이 없으면 frontend와 backend를 병렬 실행할 수 있다.
-3. API 의존이 있으면 data-layer 완료와 계약 확인 후 page-builder를 실행한다.
-4. 반환된 `완료 task_id`마다 대상 파일 실존, diff, 검증 증거를 확인한다.
-5. 확인된 task만 오케스트레이터가 completed로 갱신한다.
-6. 누락 task는 해당 agent에 1회 재요청하고, 재실패하면 필수 구현 실패로 `blocked` 처리한다.
+- API 의존이 없으면 page-builder와 data-layer를 병렬 실행할 수 있다.
+- API 의존이 있으면 계약 확인 뒤 page-builder를 실행한다.
+- 일반 코드·문서·인프라는 프로젝트 override가 없으면 오케스트레이터가 직접 수행한다.
 
-구현 결과를 `milestone-tracker`에 전달할 때는 파일명 추측을 요구하지 않는다. `task_id`, `checklist_id`, 파일 경로를 함께 전달한다.
+반환된 task마다 파일 실존, diff, 검증 증거를 확인한다. 누락은 같은 입력으로 1회 재요청하고 재실패하면 필수 구현 실패로 `blocked` 처리한다.
 
-## Phase 4: 검증
+## Phase 3: 검증
 
-정규 순서는 변경하지 않는다.
+선택한 gate profile에 필요한 agent만 호출한다. 정확한 대상 파일과 같은 request_id를 전달한다.
 
-```text
-design-reviewer(UI일 때)
-  -> qa-guard
-  -> security-auditor(고위험일 때)
-  -> evaluator
-```
+- `direct`: 정형 문서·상태·세션 작업. 결정적 스크립트와 diff 검토만 수행한다.
+- `lean`: 격리된 저위험 변경. qa-guard를 기본으로 하고, 사용자 행동·공개 계약·완료 기준 판정이 있으면 evaluator를 추가한다.
+- `full`: 마일스톤, UI, 다중 모듈, auth/session, migration, payment, destructive 작업. design(UI) → QA → security(고위험) → evaluator 순서다.
 
-각 호출에는 직전 산출물의 정확한 경로와 `request_id`를 전달한다. `latest glob`으로 다른 scope 보고서를 선택하지 않는다.
+UI를 검증하는 작업 봉투에는 UI 검증 모드, 선호 수단, 대체 허용, URL, viewport, 시나리오를 포함한다. 특정 도구 부재만으로 감사를 중단하지 않되 필수 증거가 없으면 approved를 금지한다.
 
-UI를 확인하는 모든 agent의 작업 봉투에는 `UI 검증 모드`, `선호 UI 검증
-수단`, `대체 검증 허용`, URL, viewport, 재현 시나리오를 명시한다. 특정 도구를
-필수로 고정하지 않고 [ui-verification-fallback.md](references/ui-verification-fallback.md)의
-증거 등가표에 따라 실제 사용 가능한 수단을 선택한다.
+호출한 필수 design, QA, security, evaluator가 1회 재시도 후에도 실행 실패하면 fail-closed로 `blocked` 처리한다. 결과 없이 다음 게이트·완료·커밋으로 진행하지 않는다.
 
-감사 모드에서는 상류 게이트의 `수정필요`나 도구 한계 때문에 남은 `미확인`을
-숨기지 않은 채 나머지 진단 게이트를 계속 실행한다. 이는 완료 승인이 아니라
-최종 evaluator가 전체 결함과 검증 부채를 한 보고서로 판정하게 하기 위한
-예외다. 구현 완료·tracker 전이·커밋에는 정규 승인 조건을 그대로 적용한다.
+보완 파일은 변경 의미에 맞는 상류 게이트부터 다시 검증한다. 같은 결함의 반복과 상한은 error-handling을 따른다.
 
-### Design
+## Phase 4: 완료와 상태 기록
 
-- 프론트 구현이 있으면 실행한다.
-- 자동 수정 파일도 이후 QA와 evaluator 범위에 포함한다.
-- 선호 도구가 없으면 컴포넌트 런타임·HTTP·정적 분석·사용자 확인 폴백을
-  수행한다. 모든 기준이 등가 증거로 확인된 경우에만 approved다.
-- 감사 모드에서 일부 기준이 끝내 미확인이면 보고서를 `수정필요`로 완성하고
-  다음 진단 게이트로 진행하되, 구현 완료 신호로 사용하지 않는다.
+1. 필수 게이트의 approved와 미검증 부채를 확인한다.
+2. UI 마일스톤은 evaluator 승인 뒤 URL·시나리오를 사용자에게 제시하고 `사용자 검증: 통과`를 받는다.
+3. `milestone-track` 형식의 전이 요청 JSON을 만들고 `scripts/validate-milestone-transition.py` exit 0을 확인한다.
+4. 정확한 task/checklist ID만 진행 문서에 적용하고 diff를 재검토한다.
+5. 마이그레이션은 dev/test 적용, rollback·backup 근거를 확인한다.
 
-### QA
+필수 미검증은 부채 기록만으로 완료할 수 없다.
 
-- 구현 파일과 TDD 테스트를 대상으로 실행한다.
-- 실행 명령, exit code, 결과 분류가 없는 보고서는 형식 재전송을 요구한다.
-- `검증불가`는 통과가 아니다. 필수 항목이면 파이프라인을 중단한다.
+## 커밋과 학습
 
-### Security
+커밋 정책은 `auto | ask | disabled`, 미정의 기본값은 `ask`다.
 
-프로젝트 `AGENTS.md`의 보안 path/keyword manifest로 판정한다. manifest가 없으면 API route, server action, auth/session/permission/admin/payment/webhook/upload/delete, 개인정보 read/write를 보수적으로 감사한다.
+- `auto`: `commit-local` capability, 범위, 검증이 모두 확인된 경우만 커밋한다.
+- `ask`: 사용자 승인 뒤 커밋한다.
+- `disabled`: 커밋하지 않는다.
 
-auth/session 신규 설계는 항상 실행한다. `inconclusive`는 approved가 아니며 evaluator로 진행하지 않는다.
-
-### Evaluator
-
-구현 파일과 이번 request에 연결된 design, QA, security 보고서 경로를 정확히 전달한다.
-
-- blocking `△`, `✗`, `⚠`, `?`가 하나라도 있으면 `수정필요` 또는 `blocked`다.
-- 승인된 `◐ 의도적 제외`만 blocking이 아니며 최종 사용자 보고에 다시 노출한다.
-- UI 범위는 브라우저 하나가 아니라 요구사항별 등가 런타임 증거가 필요하다.
-  정적 코드만으로 긍정 동작을 추정하지 않으며, 도구 부재 자체는 감사 중단
-  사유가 아니다. 등가 증거가 없는 항목은 `?`로 남겨 approved를 금지한다.
-
-### 보완 재게이팅
-
-보완 파일은 변경 종류에 맞춰 design -> QA -> security -> evaluator 순서로 재진입한다. 기능형 프론트 버그는 경로 prefix가 시각 경로여도 evaluator를 생략하지 않는다. 같은 결함의 반복과 상한은 [error-handling.md](references/error-handling.md)를 따른다.
-
-필수 design, QA, security, evaluator가 1회 재시도 후에도 실행 실패하면 fail-closed로 `blocked` 처리한다. 결과 없이 다음 단계로 진행하지 않는다.
-
-## Phase 5: 완료
-
-### 검증 부채
-
-미실행 테스트, 환경 차단, 사용자 승인 예외, 외부 의존, 도구 부재를 수집한다. 부채는 숨기지 않고 tracker 작업 로그와 사용자 보고에 기록한다. 필수 게이트 미실행은 부채 기록만으로 완료할 수 없다.
-
-### UI 마일스톤
-
-1. evaluator approved 후 구현 파일, 검증 결과, 의도적 제외, 부채, URL과 재현 시나리오를 사용자에게 제시한다.
-2. 사용자 긍정 응답을 기다린다.
-3. `milestone-tracker`에 `작업 유형: UI`, `사용자 검증: 통과`, evaluator 원본 승인 신호, task/checklist ID를 전달한다.
-4. tracker가 위 필드 중 하나라도 거부하면 완료하지 않는다.
-
-### 비-UI 마일스톤
-
-마이그레이션·스키마·백필이면 dev/test 적용 증거, rollback·backup 근거를 확인한다. 증거가 없으면 사용자에게 적용 또는 미적용 커밋을 확인하고, 미적용 승인은 검증 부채로 기록한다.
-
-`milestone-tracker`에는 `작업 유형: non-UI`, evaluator 원본 승인 신호, task/checklist ID를 전달한다.
-
-### 커밋
-
-프로젝트 정책은 `auto | ask | disabled` 중 하나다. 미정의 기본값은 `ask`다.
-
-- `auto`: `commit-local` capability가 있고 범위·검증이 확정된 경우만 커밋한다.
-- `ask`: 사용자 승인을 받은 뒤 커밋한다.
-- `disabled`: 커밋하지 않고 변경 상태를 보고한다.
-- capability가 없으면 자동 커밋을 시도하지 않고 설치·수동 경로를 보고한다.
-
-### 학습 드레인
-
-커밋 정책 처리 후 pending curate 항목이 있으면 `compound-curator`를 호출한다. 성공 결과를 받은 항목만 pending에서 제거한다. 실패·중단 항목은 다음 세션 재시도를 위해 유지한다.
+코퍼스와 선택 agent가 모두 있을 때만 pending compound 작업을 처리한다. 성공 acknowledgement를 받은 ID만 done으로 전이한다.
 
 ## 완료 보고
 
 - 완료·미완료 task
-- design, QA, security, evaluator 결과와 정확한 보고서 경로
+- 선택한 topology와 gate profile
+- 실행한 design, QA, security, evaluator 결과와 보고서
 - 의도적 제외와 검증 부채
-- tracker 상태 전이
+- 상태 전이 검증 결과
 - 커밋 정책과 실행 결과
 - pending 학습 작업
 
-다음 작업 제안은 필요할 때만 작성한다. 재개 프롬프트는 명시적 인계 요청, 안전 중단, 장기 작업 완료 때만 동반한다.
+다음 작업 제안과 재개 프롬프트는 필요할 때만 작성한다.

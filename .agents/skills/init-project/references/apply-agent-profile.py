@@ -16,7 +16,7 @@ SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 PROFILE_PATH = SCRIPT_DIR / "agent-profiles.json"
 MODEL_FIELDS = ("model", "model_reasoning_effort")
 ALLOWED_MODELS = {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}
-ALLOWED_EFFORTS = {"medium", "high", "xhigh"}
+ALLOWED_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -118,16 +118,16 @@ def main() -> int:
     expected_names = set(selected)
     source_names = {path.stem for path in args.source_agents.glob("*.toml")}
     target_names = {path.stem for path in args.target_agents.glob("*.toml")}
-    if source_names != expected_names or target_names != expected_names:
+    if source_names != expected_names or not target_names or not target_names <= expected_names:
         raise ValueError(
             "agent 목록이 프로필과 일치하지 않습니다: "
             f"source missing={sorted(expected_names - source_names)}, source extra={sorted(source_names - expected_names)}, "
-            f"target missing={sorted(expected_names - target_names)}, target extra={sorted(target_names - expected_names)}"
+            f"target unsupported={sorted(target_names - expected_names)}"
         )
 
     updates: list[tuple[pathlib.Path, str]] = []
     mismatches: list[str] = []
-    for agent_name in sorted(expected_names):
+    for agent_name in sorted(target_names):
         source_path = args.source_agents / f"{agent_name}.toml"
         target_path = args.target_agents / f"{agent_name}.toml"
         source_text = load_toml(source_path, agent_name)
@@ -149,12 +149,12 @@ def main() -> int:
             f"{', '.join(sorted(set(mismatches)))}"
         )
     if args.check:
-        print(f"프로필 일치 확인: {args.profile} ({len(expected_names)} agents)")
+        print(f"프로필 일치 확인: {args.profile} ({len(target_names)} agents)")
         return 0
 
     for path, text in updates:
         atomic_write(path, text)
-    print(f"프로필 적용 완료: {args.profile} (변경 {len(updates)} / {len(expected_names)} agents)")
+    print(f"프로필 적용 완료: {args.profile} (변경 {len(updates)} / {len(target_names)} agents)")
     return 0
 
 

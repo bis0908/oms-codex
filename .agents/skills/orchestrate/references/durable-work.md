@@ -4,10 +4,10 @@
 
 | 분류 | 역할 | 재실패 처리 |
 |---|---|---|
-| 필수 구현 | page-builder, data-layer, 프로젝트 구현 override | `blocked`, 다음 게이트 금지 |
+| 필수 구현 | page-builder, data-layer, 프로젝트 구현 override 또는 오케스트레이터 직접 구현 | `blocked`, 다음 게이트 금지 |
 | 필수 검증 | design(UI), QA, security(조건부), evaluator | `blocked`, 완료·커밋 금지 |
-| 보조 | compound-learner, compound-curator, session-archivist | 실패 기록 후 본 작업 결과 보고 가능 |
-| 상태 기록 | milestone-tracker | 완료 상태 전이 금지, 사용자에게 상태 미반영 보고 |
+| 보조 | 선택 설치 compound-learner, compound-curator, session-archive skill | 실패 기록 후 본 작업 결과 보고 가능 |
+| 상태 기록 | 오케스트레이터 + milestone-track skill + 결정적 검증기 | 완료 상태 전이 금지, 사용자에게 상태 미반영 보고 |
 
 모든 실패는 1회만 재시도한다. 필수 역할은 결과 없이 계속 진행하지 않는다.
 

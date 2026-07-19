@@ -1,159 +1,104 @@
-# GPT-5.6 에이전트 모델 선택 가이드
+# GPT-5.6 실행 정책
 
-## 1. 목적
+## 목적
 
-이 문서는 OMS Codex custom agent에 GPT-5.6 Luna, Terra, Sol과 reasoning effort를 배정할 때 적용할 기준을 정의한다. 기준은 2026-07-10에 게시된 두 Threads 클리핑을 함께 해석해 만들었다.
+OMS Codex의 model profile, reasoning effort, multi-agent topology 선택 기준을 정의한다. 정본은 다음과 같다.
 
-- `@jin___bro`: Artificial Analysis Intelligence Index v4.1의 비용 대비 성능을 근거로 Luna와 Sol 중심의 선택을 제안한다.
-- `@choi.openai`: OpenAI Codex 팀 AMA와 공식 가이드를 바탕으로 Sol Medium 중심의 운영, 작업 난도별 effort 조정, Ultra의 제한적 사용을 설명한다.
+- [GPT-5.6 모델 가이드](https://developers.openai.com/api/docs/guides/latest-model)
+- [GPT-5.6 프롬프트 가이드](https://developers.openai.com/api/docs/guides/prompt-guidance-gpt-5p6)
+- [Multi-agent 가이드](https://developers.openai.com/api/docs/guides/responses-multi-agent)
+- model profile: `../.agents/skills/init-project/references/agent-profiles.json`
+- topology profile: `../.agents/skills/init-project/references/topology-profiles.json`
 
-이 문서는 두 게시물의 주장을 운영 가설로 사용한다. 벤치마크 수치나 OpenAI 발언의 원문을 별도로 검증한 사실 검증 문서는 아니다.
+## 기본 원칙
 
-## 2. 종합 결론
+1. model profile과 topology를 독립 선택한다.
+2. 목표, 제약, 완료 기준, 검증을 한 번씩만 명시한다.
+3. 같은 model·effort에서 기준선을 만든 뒤 한 단계 낮은 effort를 대표 작업으로 비교한다.
+4. `high`, `xhigh`, `max`는 측정된 품질 이점이 있을 때만 사용한다.
+5. multi-agent는 독립적이고 경계가 명확한 작업에 사용한다.
+6. 순차 의존, 공유 상태, 짧은 작업은 한 agent가 같은 컨텍스트에서 수행한다.
 
-두 글은 다음 원칙에서 일치한다.
+## Model 선택
 
-1. 최고 모델과 최고 effort를 항상 사용하는 것은 비효율적이다.
-2. 쉬운 작업은 가벼운 모델이나 낮은 effort로 처리하고, 불확실성과 실패 비용이 커질수록 Sol과 높은 effort로 올린다.
-3. effort는 모델 등급이 아니라 한 모델이 탐색·추론·검증에 쓰는 강도다.
-4. `max`와 `Ultra`는 다르다. max는 단일 모델의 추론 강화이고, Ultra는 여러 에이전트의 병렬 실행이다.
-5. 벤치마크나 일반 가이드는 출발점일 뿐이며, 실제 코드베이스와 업무 유형에서 검증해야 한다.
-
-두 글의 가장 큰 차이는 기본 모델이다. 독립 비용 지표를 중시한 첫 글은 `Luna high/max -> Sol medium/high` 경로를 권하고 Terra의 경제성을 부정한다. OpenAI 팀의 사용 경험을 전한 둘째 글은 대부분의 코딩 작업에 `Sol medium`을 기본값으로 권하며 Terra를 5.5급 일상용 모델로 설명한다.
-
-OMS Codex는 두 관점을 다음처럼 결합한다.
-
-> 결정적이고 복구가 쉬운 작업은 Luna, 구현과 전문 판단은 Sol, Terra는 비용 제약이 있거나 프로젝트 실측에서 이점이 확인된 경우에만 사용한다.
-
-## 3. 선택 순서
-
-모델은 역할 이름만 보고 정하지 않고 아래 순서로 결정한다.
-
-### 3.1 실패 비용
-
-- 잘못된 결과가 후속 게이트에서 쉽게 발견되고 재실행 비용이 낮으면 Luna 또는 Terra 후보이다.
-- 데이터, 인증, 보안, 마이그레이션, 최종 승인처럼 오판 비용이 크면 Sol을 사용한다.
-- 필수 검증 에이전트의 모델을 낮추더라도 fail-closed 정책은 바꾸지 않는다.
-
-### 3.2 작업 불확실성
-
-- 입력과 출력 형식이 고정되고 상태 전이가 결정적이면 Luna가 적합하다.
-- 여러 파일과 계약을 함께 해석하거나 원인이 불명확하면 Sol이 적합하다.
-- 단순한 작업이지만 입력량이 많다는 이유만으로 Sol을 선택하지 않는다. 작업을 분할하거나 컨텍스트를 구조화하는 방법을 먼저 검토한다.
-
-### 3.3 검증 가능성
-
-- 기계적으로 검증 가능한 변환, 기록, 체크리스트 갱신은 가벼운 모델을 우선한다.
-- 정답이 단일하지 않은 설계, 시각 판단, 위협 모델링, 요구사항 해석은 Sol을 우선한다.
-- 모델 상향보다 입력 계약, 명시적 ID, 테스트, 검증 명령을 먼저 개선한다.
-
-### 3.4 비용과 지연
-
-- 같은 품질 기준을 통과한다면 더 저렴하고 빠른 조합을 선택한다.
-- Terra는 공식적인 중간 등급이라는 이유만으로 자동 선택하지 않는다.
-- Terra 채택에는 동일 작업군에서 Luna 또는 Sol 조합보다 성공률, 재시도 횟수, 총 토큰 비용 중 하나 이상이 낫다는 프로젝트 근거가 필요하다.
-
-## 4. 모델별 사용 기준
-
-| 모델 | 기본 용도 | 적합한 조건 | 피해야 할 조건 |
-|---|---|---|---|
-| Luna | 상태 기록, 정형 문서화, 명시적 체크리스트 처리 | 입력·출력 계약이 강하고 결과를 기계적으로 확인 가능 | 모호한 구현, 복합 원인 분석, 최종 고위험 판단 |
-| Terra | 비용 제한이 있는 반복 작업, 실측으로 검증된 중간 작업 | Luna보다 품질이 유의하게 높고 Sol보다 총비용이 낮다는 회귀 결과가 있음 | 단지 중간 등급이라는 이유로 선택, 검증 없이 필수 게이트에 배치 |
-| Sol | 구현, 복합 분석, 전문 검수, 고위험 판단 | 여러 파일·계약을 함께 다루거나 실패 비용이 큼 | 정형 복사·상태 갱신처럼 모델 능력이 병목이 아닌 작업 |
-
-## 5. effort 선택 기준
-
-이 프로젝트의 상시 허용값은 `medium`, `high`, `xhigh`다.
-
-| effort | 사용 기준 | 대표 작업 |
+| model | 기본 용도 | 선택 조건 |
 |---|---|---|
-| medium | 범위가 명확하고 검증 절차가 결정적임 | 세션 기록, 학습 사례 append, 단순 상태 전이 |
-| high | 여러 단계의 구현·분석과 자체 검토가 필요함 | 일반 구현, TDD, 버그 수정, 리팩터링, 디자인 검수 |
-| xhigh | 오판 비용이 크거나 독립적인 반증·위협 탐색이 필요함 | 최종 evaluator, 보안 감사, 복합 계획 감사 |
+| Luna | 대량·저지연 정형 작업 | 별도 agent보다 script/direct skill로 먼저 해결하며 현재 core에는 기본 배정하지 않음 |
+| Terra | 규칙 기반 검수·저빈도 문서 대조 | Sol보다 총비용이 낮고 품질 기준을 통과한다는 회귀 근거가 있음 |
+| Sol | 구현·복합 분석·고위험 판단 | 여러 파일·계약을 함께 다루거나 실패 비용이 큼 |
 
-effort는 다음 조건에서만 올린다.
+정형 상태 전이와 세션 기록은 Luna agent를 두지 않고 결정적 스크립트와 오케스트레이터 direct skill로 처리한다.
 
-- 낮은 단계에서 요구사항 누락이나 잘못된 판단이 재현된다.
-- 탐색 공간이 크고 여러 가설을 비교해야 한다.
-- 결과를 되돌리기 어렵거나 실패 비용이 크다.
-- 추가 추론이 실제 품질 향상으로 이어진다는 평가 결과가 있다.
+## Effort 선택
 
-응답이 느리거나 토큰 사용량이 크다고 모델부터 내리지 않는다. 먼저 불필요한 컨텍스트, 중복 도구 출력, 과도한 작업 범위를 줄인다.
+허용값은 `low`, `medium`, `high`, `xhigh`, `max`다.
 
-## 6. OMS Codex 역할별 권장 기준
+```text
+baseline = current_effort or medium
+compare = [baseline, one_level_lower(baseline)]
 
-아래 표는 기본 `balanced` 프로필의 권장 출발점이다. 프로젝트별 평가 결과가 있으면 프로필 정본인 `.agents/skills/init-project/references/agent-profiles.json`을 승인된 절차로 조정한다.
+if task is high-risk and eval shows material gain:
+    consider high or xhigh
 
-| 에이전트 | 권장 출발점 | 근거 | 하향 조건 |
-|---|---|---|---|
-| `bug-fixer` | Sol/high | 원인 탐색과 최소 수정, 회귀 검증이 필요 | 재현과 수정 패턴이 완전히 정형화된 경우 Terra/high 실험 |
-| `data-layer` | Sol/high | API·DB 계약과 데이터 위험을 함께 다룸 | 읽기 전용·저위험 정형 변경에서만 Terra/xhigh 평가 |
-| `page-builder` | Sol/high | 구현과 시각·상호작용 피드백 루프가 필요 | 단순 스타일 변경이며 시각 회귀가 강하면 Terra/xhigh 평가 |
-| `tdd-agent` | Sol/high | 실패 원인과 유효한 Red를 구분해야 함 | 격리된 단순 CRUD 패턴에서 Terra/high 평가 |
-| `refactor-specialist` | Sol/high | 동작 보존과 구조 판단을 동시에 수행 | 기계적 rename·분리 작업에 한해 Terra/high 평가 |
-| `design-reviewer` | Sol/high | 레퍼런스와 구현의 시각적 의미를 판단 | 완전 정형 토큰 검사만 수행하면 Terra/high 평가 |
-| `evaluator` | Sol/xhigh | 스펙·원본·구현을 대조하는 최종 필수 게이트 | 원칙적으로 유지. 비용 프로필 변경 시 승인율이 아니라 결함 검출률로 검증 |
-| `security-auditor` | Sol/xhigh | 스펙 밖 위협과 공격 경로를 탐색 | 원칙적으로 유지. 저위험 범위라도 보안 트리거가 발생하면 상향 |
-| `qa-guard` | Terra/high 또는 xhigh | 규칙 기반 정적 검사와 테스트가 중심 | 복합 실패 분석이나 보안 신호 판정이 반복 실패하면 Sol/high |
-| `plan-auditor` | Terra/high 또는 xhigh | 문서 간 정합성 대조가 중심 | 대규모 계획의 모호한 충돌 판단이 반복 실패하면 Sol/high |
-| `compound-learner` | Terra/medium | append 중심의 제한된 변환 | 일반화 판단 오류가 누적되면 Terra/high |
-| `compound-curator` | Terra/xhigh | 무손실 정리라 깊은 대조가 필요하지만 코드 구현은 아님 | 누락·잘못된 승격이 관찰되면 Sol/high |
-| `milestone-tracker` | Luna/medium | 명시적 ID 기반의 결정적 상태 전이 | 상태 오기록이 계약 보완 후에도 재현되면 Luna/high, 이후 Terra/medium |
-| `session-archivist` | Luna/medium | 정형 요약과 파일 기록이 중심 | 장기 세션의 상충 결정을 해소해야 하면 Luna/high 또는 Terra/medium |
+if task is hardest quality-first and xhigh is insufficient:
+    compare max against xhigh
 
-## 7. 현재 실행 프로필 해석
+never select max globally
+```
 
-저장소는 `balanced`, `performance`, `economy`, `low-cost` 네 프로필을 제공한다. 프로필은 역할과 게이트 수를 바꾸지 않고 모델과 effort만 바꾼다.
+현재 profile은 검증 역할의 독립 반증 가치를 고려해 일부 `high/xhigh`를 보수적 출발점으로 유지한다. 이 배정은 영구 결론이 아니며 프로젝트별 평가 결과로 조정한다.
 
-- `balanced`: 기본 선택이다. 두 클리핑을 종합해 구현·고위험 판단은 Sol, 규칙 기반 검수·학습은 Terra, 정형 상태 작업은 Luna로 나눈다.
-- `performance`: 구현과 전문 검수에 Sol을 사용한다.
-- `economy`: 비용을 줄이되 데이터, 최종 평가, 보안에는 Sol을 유지한다.
-- `low-cost`: 필수 역할도 Terra로 낮추고 정형 작업은 Luna/medium으로 수행한다.
+## Topology 선택
 
-`economy`와 `low-cost`의 Terra 배치는 영구적인 품질 동등성을 의미하지 않는다. 두 클리핑을 종합하면 Terra는 가장 먼저 실측해야 하는 구간이다. 비용 프로필을 채택할 때는 작업당 API 가격이 아니라 재시도와 후속 수정까지 포함한 완료 비용을 비교해야 한다.
+### Lean
 
-## 8. 상향·하향 운영 규칙
+기본 topology다. core agent 6개만 설치한다.
 
-### 상향
+- `page-builder`
+- `data-layer`
+- `design-reviewer`
+- `qa-guard`
+- `security-auditor`
+- `evaluator`
 
-다음 중 하나가 발생하면 `effort 상향 -> Sol 전환` 순서로 검토한다.
+bugfix, refactor, TDD, milestone tracking, session archive는 별도 agent가 아니라 direct skill mode다.
 
-1. 동일 유형 작업이 두 번 연속 필수 게이트에서 실패한다.
-2. 원인 불명 버그, 다중 모듈 변경, 인증·보안·마이그레이션으로 범위가 확대된다.
-3. 누락 탐지나 반증이 핵심인 최종 판단이다.
-4. 재시도 비용이 상위 모델의 추가 비용보다 커진다.
+### Full
 
-필수 구현·검증 역할의 재실패는 모델을 계속 올리며 우회하지 않고 프로젝트 원칙대로 fail-closed 처리한다.
+lean core에 다음 선택 agent를 추가한다.
 
-### 하향
+- `plan-auditor`
+- `compound-learner`
+- `compound-curator`
 
-다음 조건을 모두 만족할 때만 하향한다.
+full 설치는 모든 agent의 매 작업 호출을 뜻하지 않는다. 계획 감사 요청 또는 실제 compound 코퍼스가 있을 때만 선택 agent를 호출한다.
 
-1. 동일 작업군의 입력·출력 계약이 안정되어 있다.
-2. 테스트 또는 정적 검증으로 결과를 자동 판정할 수 있다.
-3. 최근 평가 표본에서 결함 검출률이나 성공률이 허용 기준을 충족한다.
-4. 재시도를 포함한 총비용이 실제로 감소한다.
+## Gate 선택
 
-## 9. 평가 지표
+| gate | 대상 | 검증 |
+|---|---|---|
+| direct | 정형 문서·상태·세션 | parser/script + diff |
+| lean | 격리된 저위험 코드 | QA, 행동·계약 판정이면 evaluator 추가 |
+| full | UI 마일스톤·다중 모듈·고위험 | design → QA → security(조건부) → evaluator |
 
-모델 조합은 최소 다음 값을 같은 작업군에서 비교한다.
+Multi-agent는 다음 조건에서만 사용한다.
+
+```text
+if tasks are independent and bounded and do not share mutable state:
+    parallelize
+else:
+    keep one agent and one context
+```
+
+따라서 data-layer는 TDD Red와 Green 구현을 같은 컨텍스트에서 수행한다. evaluator와 security-auditor는 구현자와 다른 관점의 독립 반증이므로 유지한다.
+
+## 평가 지표
 
 - 첫 시도 성공률
-- 필수 게이트 통과율
-- evaluator 또는 security-auditor가 뒤늦게 찾은 결함 수
-- 평균 재시도 횟수
-- 완료까지의 입력·출력 토큰과 소요 시간
+- 필수 검증 통과율
+- 뒤늦게 발견된 결함 수
+- 재시도 횟수
+- 입력·출력 토큰, 지연, 비용
 - 사람이 수정한 범위와 복구 비용
 
-단일 종합 벤치마크 점수만으로 모델을 교체하지 않는다. 최소한 대표 작업, 고위험 작업, 장문 컨텍스트 작업을 분리해 평가한다.
-
-## 10. 실무 결정 요약
-
-새 에이전트나 역할을 추가할 때는 다음 기본값에서 시작한다.
-
-1. 정형 상태·기록 작업: `Luna/medium`
-2. 규칙 기반 반복 검수·문서 대조: `Terra/high`
-3. 일반 구현·복합 분석: `Sol/high`
-4. 최종 승인·보안·고위험 판단: `Sol/xhigh`
-
-이후 프로젝트 회귀 평가로만 낮춘다. Terra가 Luna 또는 Sol 조합보다 비용 대비 우위가 확인되지 않으면, 정형 작업은 Luna로 내리고 복합 작업은 Sol로 올리는 두 갈래 구성을 우선한다.
+model, effort, prompt, topology를 동시에 바꾸지 않는다. 한 축을 변경한 뒤 같은 대표 작업을 재실행한다.

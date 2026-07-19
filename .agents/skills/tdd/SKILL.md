@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: 데이터/백엔드 레이어 TDD 전담 스킬. 데이터 접근 레이어·API 엔드포인트·서비스 모듈 구현 전 실패 테스트(Red)를 작성하고 실패 확인까지 수행한다. tdd-agent가 사용한다.
+description: data-layer가 데이터 접근·API·서비스 구현과 같은 컨텍스트에서 Red→Green을 수행할 때 사용하는 TDD 스킬.
 ---
 
 ## 재발 방지 학습 (작업 전 필독)
@@ -137,38 +137,8 @@ afterEach(async () => {
 });
 ```
 
-## 반환 메시지 형식
+## 반환 계약
 
-```
-완료 항목:
-- <작성한 테스트 파일 경로>
-완료 task_id: <완료한 task_id 목록 또는 없음>
-
-Red 상태: <red-confirmed | red-blocked | already-green>
-격리 방식: <test DB | transaction rollback | 고유 fixture | 미확보>
-cleanup 검증: <pass | fail | 미실행>
-Red 확인:
-> <프로젝트 테스트 명령> <테스트 파일 경로>
-  FAIL  <테스트 파일 경로>
-    findProfileByNo
-      ✗ 존재하는 번호로 조회하면 정보를 반환한다
-        AssertionError: expected null not to be null
-
-마일스톤: M{N}
-단계: phase-2.5-tdd
-에이전트: tdd-agent
-미완료 항목:
-- 없음
-확인 필요:
-- 없음
-검증:
-- <실행 명령 — 종료 코드 — assertion 실패 요약 또는 차단 원인>
-미검증 항목:
-- <없음 또는 실행하지 못한 검증>
-다음 단계:
-- <구현 에이전트 Green 구현 | 차단 환경 복구 | 테스트 계약 확인>
-request_id: <호출 request_id>
-결과: <completed | needs-input | blocked | failed>
-```
+공통 키는 `orchestrate/references/agent-contract.md`를 사용한다. 역할별로 `Red 상태`, `테스트 파일`, `격리 방식`, `cleanup 검증`, `Red 확인`을 추가하고 `에이전트: data-layer`로 반환한다.
 
 `red-confirmed`이면 `completed`, 이미 Green이어서 테스트 계약 확인이 필요하면 `needs-input`, 환경 문제인 `red-blocked`는 `blocked`, 테스트 작성·실행 자체가 복구 불가능하게 실패하면 `failed`다.

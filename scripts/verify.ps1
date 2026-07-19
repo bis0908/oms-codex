@@ -13,7 +13,7 @@ if (-not (Test-Path -LiteralPath $profileManifestPath -PathType Leaf)) {
 else {
     try {
         $profileManifest = Get-Content -LiteralPath $profileManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($profileManifest.schema_version -ne 1 -or $profileManifest.default_profile -ne "balanced") {
+        if ($profileManifest.schema_version -ne 2 -or $profileManifest.default_profile -ne "balanced") {
             [void]$errors.Add("agent profile 기본 설정 불일치")
         }
 
@@ -29,7 +29,7 @@ else {
                 if ($model -notin @("gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna")) {
                     [void]$errors.Add("agent profile model 불일치: $profileName/$($agent.Name)")
                 }
-                if ($effort -notin @("medium", "high", "xhigh")) {
+                if ($effort -notin @("low", "medium", "high", "xhigh", "max")) {
                     [void]$errors.Add("agent profile effort 불일치: $profileName/$($agent.Name)")
                 }
             }
@@ -131,6 +131,7 @@ function Get-PythonCommand {
     "install.ps1",
     "install.sh",
     ".agents\skills\init-project\references\agent-profiles.json",
+    ".agents\skills\init-project\references\topology-profiles.json",
     ".agents\skills\init-project\references\apply-agent-profile.py",
     ".agents\skills",
     ".codex\agents"
@@ -140,7 +141,7 @@ Forbid-Path ".codex-plugin"
 Forbid-Path ".agents\plugins"
 
 $version = Get-RequiredText "VERSION"
-if ($null -ne $version -and $version.Trim() -ne "1.1.4") {
+if ($null -ne $version -and $version.Trim() -ne "1.2.0") {
     Add-ErrorMessage "VERSION 불일치: $($version.Trim())"
 }
 
@@ -204,8 +205,11 @@ $skillsPath = Join-RootPath ".agents\skills"
 if (Test-Path -LiteralPath $skillsPath -PathType Container) {
     try {
         $skillFiles = @(Get-ChildItem -LiteralPath $skillsPath -Recurse -Filter "SKILL.md" -File)
-        if ($skillFiles.Count -ne 13) {
-            Add-ErrorMessage "SKILL.md 파일 수 불일치: $($skillFiles.Count)"
+        $requiredSkills = @("bugfix", "compound", "design-review", "evaluate", "init-project", "milestone-track", "orchestrate", "plan-audit", "qa", "refactor", "security-audit", "session-archive", "tdd")
+        foreach ($requiredSkill in $requiredSkills) {
+            if (-not (Test-Path -LiteralPath (Join-Path $skillsPath "$requiredSkill\SKILL.md") -PathType Leaf)) {
+                Add-ErrorMessage "필수 skill 누락: $requiredSkill"
+            }
         }
         foreach ($file in $skillFiles) {
             $text = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
@@ -274,9 +278,26 @@ else {
 
 Require-Text "README.md" 'install\.ps1 -Target' "README install.ps1 target"
 Require-Text "README.md" 'install\.sh --target' "README install.sh target"
-Require-Text "README.md" 'OMS Codex 1\.1\.4' "README version"
+Require-Text "README.md" 'OMS Codex 1\.2\.0' "README version"
 Require-Text "install.ps1" '\[string\]\$Target' "install.ps1 target parameter"
+Require-Text "install.ps1" 'Topology' "install.ps1 topology parameter"
 Require-Text "install.sh" -- '--target\)' "install.sh target parameter"
+Require-Text "install.sh" -- '--topology\)' "install.sh topology parameter"
+
+if ($errors.Count -eq 0) {
+    $installerSafetyVerifier = Join-RootPath "scripts\verify-installer-safety.ps1"
+    if (-not (Test-Path -LiteralPath $installerSafetyVerifier -PathType Leaf)) {
+        Add-ErrorMessage "PowerShell 설치기 안전성 검증 스크립트 없음"
+    }
+    else {
+        try {
+            & $installerSafetyVerifier -Root $root | Out-Null
+        }
+        catch {
+            Add-ErrorMessage "PowerShell 설치기 안전성 검증 실패: $($_.Exception.Message)"
+        }
+    }
+}
 
 if ($errors.Count -gt 0) {
     foreach ($errorMessage in $errors) {

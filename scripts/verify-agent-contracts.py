@@ -13,27 +13,23 @@ import tomllib
 ROOT = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else pathlib.Path(__file__).resolve().parents[1]
 
 AGENT_SKILLS = {
-    "bug-fixer": "bugfix",
     "compound-curator": "compound",
     "compound-learner": "compound",
-    "data-layer": None,
+    "data-layer": "tdd",
     "design-reviewer": "design-review",
     "evaluator": "evaluate",
-    "milestone-tracker": "milestone-track",
     "page-builder": None,
     "plan-auditor": "plan-audit",
     "qa-guard": "qa",
-    "refactor-specialist": "refactor",
     "security-auditor": "security-audit",
-    "session-archivist": "session-archive",
-    "tdd-agent": "tdd",
 }
 
 PROFILE_PATH = pathlib.Path(".agents/skills/init-project/references/agent-profiles.json")
 PROFILE_HELPER_PATH = pathlib.Path(".agents/skills/init-project/references/apply-agent-profile.py")
+TOPOLOGY_PATH = pathlib.Path(".agents/skills/init-project/references/topology-profiles.json")
 PROFILE_NAMES = {"balanced", "performance", "economy", "low-cost"}
 ALLOWED_MODELS = {"gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"}
-ALLOWED_EFFORTS = {"medium", "high", "xhigh"}
+ALLOWED_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 
 COMMON_RETURN_KEYS = (
     "결과:",
@@ -51,39 +47,20 @@ COMMON_RETURN_KEYS = (
 )
 
 ROLE_EXTENSIONS = {
-    "bug-fixer": ("재현 확인:", "재발 조건:", "evaluator 필요 여부:"),
-    "compound-curator": ("무손실 검증:", "acknowledgement:", "acknowledged ID:"),
-    "compound-learner": ("학습 트리거:", "acknowledgement:", "acknowledged ID:"),
-    "data-layer": ("위험 클래스:", "migration 롤백·백업 근거:"),
-    "design-reviewer": ("디자인 검수 결과:", "보고서:", "호출 ID:"),
-    "evaluator": ("검증 결과:", "보고서:", "호출 ID:", "blocking 항목:"),
-    "milestone-tracker": ("상태 전이:", "작업 유형:", "사용자 검증:"),
-    "page-builder": ("연결 지점:", "UI 상태:"),
-    "plan-auditor": ("정합성 결과:", "분자/분모:", "보고서:"),
-    "qa-guard": ("QA 검증 결과:", "보고서:", "호출 ID:", "검증 부채:"),
-    "refactor-specialist": ("기준선:", "보존 확인:", "공개 계약 diff:"),
-    "security-auditor": ("보안 감사 결과:", "보고서:", "잔여 위험:", "학습 신호:"),
-    "session-archivist": ("민감정보 점검:", "redaction:", "파일명 충돌 처리:"),
-    "tdd-agent": ("Red 상태:", "격리 방식:", "cleanup 검증:"),
-}
-
-SKILL_EXTENSIONS = {
-    "bugfix": ("재현 확인:", "재발 조건:", "evaluator 필요 여부:"),
-    "compound": ("학습 트리거:", "무손실 검증:", "acknowledgement:", "acknowledged ID:"),
-    "design-review": ("디자인 검수 결과:", "보고서:", "호출 ID:"),
-    "evaluate": ("검증 결과:", "보고서:", "호출 ID:", "blocking 항목:"),
-    "milestone-track": ("상태 전이:", "작업 유형:", "사용자 검증:"),
-    "plan-audit": ("정합성 결과:", "분자/분모:", "보고서:"),
-    "qa": ("QA 검증 결과:", "보고서:", "호출 ID:", "검증 부채:"),
-    "refactor": ("기준선:", "보존 확인:", "공개 계약 diff:"),
-    "security-audit": ("보안 감사 결과:", "보고서:", "잔여 위험:", "학습 신호:"),
-    "session-archive": ("민감정보 점검:", "redaction:", "파일명 충돌 처리:"),
-    "tdd": ("Red 상태:", "격리 방식:", "cleanup 검증:"),
+    "compound-curator": ("무손실 검증", "acknowledgement", "acknowledged ID"),
+    "compound-learner": ("학습 트리거", "acknowledgement", "acknowledged ID"),
+    "data-layer": ("Red 상태", "격리 방식", "위험 클래스", "migration 롤백·백업 근거"),
+    "design-reviewer": ("디자인 검수 결과", "보고서", "호출 ID"),
+    "evaluator": ("검증 결과", "보고서", "호출 ID", "blocking 항목"),
+    "page-builder": ("연결 지점", "UI 상태"),
+    "plan-auditor": ("정합성 결과", "분자/분모", "보고서"),
+    "qa-guard": ("QA 검증 결과", "보고서", "호출 ID", "검증 부채"),
+    "security-auditor": ("보안 감사 결과", "보고서", "잔여 위험", "학습 신호"),
 }
 
 REQUIRED_TEXT = {
     ".agents/skills/orchestrate/SKILL.md": (
-        "필수 design, QA, security, evaluator가 1회 재시도 후에도 실행 실패하면 fail-closed",
+        "호출한 필수 design, QA, security, evaluator가 1회 재시도 후에도 실행 실패하면 fail-closed",
         "compound-curator",
         "red-confirmed",
         "red-blocked",
@@ -103,7 +80,7 @@ REQUIRED_TEXT = {
     ),
     ".agents/skills/orchestrate/references/pipeline-gates.md": (
         "plan-remediation",
-        "auth/session: QA -> security(필수) -> evaluator",
+        "`auth | payment | migration | destructive` 위험 클래스는 항상 `full`",
         "감사 모드 진단 연속성",
         "구현 완료로",
         "전이하지 않는다",
@@ -133,10 +110,10 @@ REQUIRED_TEXT = {
         "blocking 항목을 approved로 바꾸지 않는다",
     ),
     ".codex/agents/design-reviewer.toml": (
-        "UI 검증 모드",
-        "production 컴포넌트 런타임 테스트",
-        "대체 검증은 `approved`",
-        "completed + 수정필요",
+        "UI 작업이거나 디자인 레퍼런스가 있을 때만 호출",
+        "변경 의미, diff 범위, 재검증 가능성",
+        "completion 모드",
+        "audit 모드",
     ),
     ".agents/skills/compound/SKILL.md": ("security-repeat", "compound-curator"),
     ".agents/skills/tdd/SKILL.md": ("red-confirmed", "red-blocked"),
@@ -176,6 +153,18 @@ def fail(message: str) -> None:
     print(message, file=sys.stderr)
 
 
+def verify_common_contract(errors: list[str]) -> None:
+    contract_path = ROOT / ".agents" / "skills" / "orchestrate" / "references" / "agent-contract.md"
+    try:
+        contract = contract_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        errors.append(f"공통 반환 계약 읽기 실패: {exc}")
+        return
+    for key in COMMON_RETURN_KEYS:
+        if key not in contract:
+            errors.append(f"공통 반환 계약 키 누락: {key}")
+
+
 def load_profile_policy(errors: list[str]) -> dict[str, tuple[str, str, str | None]]:
     profile_path = ROOT / PROFILE_PATH
     try:
@@ -184,7 +173,7 @@ def load_profile_policy(errors: list[str]) -> dict[str, tuple[str, str, str | No
         errors.append(f"agent profile JSON 파싱 실패: {PROFILE_PATH}: {exc}")
         return {}
 
-    if data.get("schema_version") != 1:
+    if data.get("schema_version") != 2:
         errors.append("agent profile schema_version 불일치")
     if data.get("default_profile") != "balanced":
         errors.append("agent profile 기본값은 balanced여야 합니다")
@@ -292,9 +281,135 @@ def verify_profile_application(errors: list[str]) -> None:
             errors.append("agent profile 사용자 변경 충돌 보류 검증 실패")
 
 
+def verify_topologies(errors: list[str], expected_agents: set[str]) -> None:
+    try:
+        data = json.loads((ROOT / TOPOLOGY_PATH).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"topology profile JSON 파싱 실패: {TOPOLOGY_PATH}: {exc}")
+        return
+    if data.get("schema_version") != 1 or data.get("default_topology") != "lean":
+        errors.append("topology profile 기본 설정 불일치")
+        return
+    topologies = data.get("topologies")
+    if not isinstance(topologies, dict) or set(topologies) != {"lean", "full"}:
+        errors.append("topology profile 목록 불일치")
+        return
+    lean = topologies["lean"]
+    full = topologies["full"]
+    name_pattern = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+    def validate_agent_list(topology_name: str, key: str) -> list[str]:
+        value = topologies[topology_name].get(key)
+        if (
+            not isinstance(value, list)
+            or any(not isinstance(name, str) or not name_pattern.fullmatch(name) for name in value)
+            or len(value) != len(set(value))
+        ):
+            errors.append(f"topology agent 목록 형식 불일치: {topology_name}/{key}")
+            return []
+        return value
+
+    lean_default_list = validate_agent_list("lean", "default_agents")
+    lean_optional_list = validate_agent_list("lean", "optional_agents")
+    full_default_list = validate_agent_list("full", "default_agents")
+    full_optional_list = validate_agent_list("full", "optional_agents")
+    lean_default = set(lean_default_list)
+    lean_optional = set(lean_optional_list)
+    full_default = set(full_default_list)
+    if lean_default & lean_optional or lean_default | lean_optional != expected_agents:
+        errors.append("lean topology agent 분류 불일치")
+    if full_default != expected_agents or full_optional_list != []:
+        errors.append("full topology agent 분류 불일치")
+    required_modes = {"bugfix", "milestone-track", "refactor", "session-archive", "tdd"}
+    for name, topology in topologies.items():
+        if set(topology.get("direct_skill_modes", [])) != required_modes:
+            errors.append(f"topology direct skill mode 불일치: {name}")
+
+
+def verify_transition_validator(errors: list[str]) -> None:
+    validator = ROOT / "scripts" / "validate-milestone-transition.py"
+    if not validator.is_file():
+        errors.append("마일스톤 전이 검증기 누락")
+        return
+    valid_payload = {
+        "request_id": "verify-transition",
+        "milestone": "M1",
+        "phase": "phase-5-complete",
+        "sender": "orchestrator",
+        "work_type": "UI",
+        "risk_class": "ui",
+        "task_ids": ["T1"],
+        "checklist_ids": ["C1"],
+        "evaluation_result": "approved",
+        "evaluation_report": "_workspace/eval_m1.md",
+        "gate_profile": "full",
+        "required_gates": ["design", "qa", "evaluator"],
+        "gate_results": {"design": "approved", "qa": "approved", "evaluator": "approved"},
+        "user_verification": "통과",
+    }
+    invalid_payload = dict(valid_payload, user_verification="누락")
+    empty_gates_payload = dict(valid_payload, required_gates=[], gate_results={})
+    missing_gate_payload = dict(valid_payload, gate_results={"design": "approved", "qa": "approved"})
+    security_omission_payload = dict(
+        valid_payload,
+        work_type="non-UI",
+        risk_class="auth",
+        required_gates=["qa", "evaluator"],
+        gate_results={"qa": "approved", "evaluator": "approved"},
+    )
+    ui_lean_payload = dict(
+        valid_payload,
+        gate_profile="lean",
+        required_gates=["qa"],
+        gate_results={"qa": "approved"},
+    )
+    with tempfile.TemporaryDirectory(prefix="oms-codex-transition-") as temp_dir:
+        temp_path = pathlib.Path(temp_dir)
+        valid_path = temp_path / "valid.json"
+        invalid_path = temp_path / "invalid.json"
+        empty_gates_path = temp_path / "empty-gates.json"
+        missing_gate_path = temp_path / "missing-gate.json"
+        security_omission_path = temp_path / "security-omission.json"
+        ui_lean_path = temp_path / "ui-lean.json"
+        valid_path.write_text(json.dumps(valid_payload), encoding="utf-8")
+        invalid_path.write_text(json.dumps(invalid_payload), encoding="utf-8")
+        empty_gates_path.write_text(json.dumps(empty_gates_payload), encoding="utf-8")
+        missing_gate_path.write_text(json.dumps(missing_gate_payload), encoding="utf-8")
+        security_omission_path.write_text(json.dumps(security_omission_payload), encoding="utf-8")
+        ui_lean_path.write_text(json.dumps(ui_lean_payload), encoding="utf-8")
+        valid_result = subprocess.run([sys.executable, str(validator), str(valid_path)], capture_output=True, text=True)
+        invalid_result = subprocess.run([sys.executable, str(validator), str(invalid_path)], capture_output=True, text=True)
+        empty_gates_result = subprocess.run(
+            [sys.executable, str(validator), str(empty_gates_path)], capture_output=True, text=True
+        )
+        missing_gate_result = subprocess.run(
+            [sys.executable, str(validator), str(missing_gate_path)], capture_output=True, text=True
+        )
+        security_omission_result = subprocess.run(
+            [sys.executable, str(validator), str(security_omission_path)], capture_output=True, text=True
+        )
+        ui_lean_result = subprocess.run(
+            [sys.executable, str(validator), str(ui_lean_path)], capture_output=True, text=True
+        )
+        if valid_result.returncode != 0:
+            errors.append(f"유효 마일스톤 전이 검증 실패: {valid_result.stdout} {valid_result.stderr}")
+        if invalid_result.returncode == 0 or "사용자 검증" not in invalid_result.stdout:
+            errors.append("무효 마일스톤 전이 거부 실패")
+        if empty_gates_result.returncode == 0 or "required_gates" not in empty_gates_result.stdout:
+            errors.append("빈 필수 gate 전이 거부 실패")
+        if missing_gate_result.returncode == 0 or "정확히 일치" not in missing_gate_result.stdout:
+            errors.append("필수 gate 일부 누락 전이 거부 실패")
+        if security_omission_result.returncode == 0 or "security gate" not in security_omission_result.stdout:
+            errors.append("보안 고위험 security gate 누락 전이 거부 실패")
+        if ui_lean_result.returncode == 0 or "UI 완료에는 full" not in ui_lean_result.stdout:
+            errors.append("UI lean 완료 전이 거부 실패")
+
+
 def main() -> int:
     errors: list[str] = []
+    verify_common_contract(errors)
     policy = load_profile_policy(errors)
+    verify_topologies(errors, set(policy))
     agents_dir = ROOT / ".codex" / "agents"
     paths = sorted(agents_dir.glob("*.toml"))
     names = {path.stem for path in paths}
@@ -336,11 +451,12 @@ def main() -> int:
             errors.append(f"{path.name} effort 불일치: {data.get('model_reasoning_effort')!r}")
 
         instructions = data.get("developer_instructions", "")
-        for key in COMMON_RETURN_KEYS:
-            if not re.search(rf"(?m)^{re.escape(key)}", instructions):
-                errors.append(f"{path.name} 공통 반환 키 누락: {key}")
+        if "agent-contract.md" not in instructions:
+            errors.append(f"{path.name} 공통 계약 참조 누락")
+        if "## 공통 반환 형식" in instructions or "## 표준 반환" in instructions:
+            errors.append(f"{path.name} 공통 반환 계약 중복")
         for key in ROLE_EXTENSIONS[name]:
-            if not re.search(rf"(?m)^{re.escape(key)}", instructions):
+            if key not in instructions:
                 errors.append(f"{path.name} 역할별 반환 키 누락: {key}")
 
         if skill:
@@ -360,19 +476,6 @@ def main() -> int:
             if needle not in text:
                 errors.append(f"필수 계약 텍스트 없음: {relative}: {needle}")
 
-    agent_skill_names = sorted({skill for _, _, skill in policy.values() if skill})
-    for skill in agent_skill_names:
-        path = ROOT / ".agents" / "skills" / skill / "SKILL.md"
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8")
-        for key in COMMON_RETURN_KEYS:
-            if key not in text:
-                errors.append(f"{skill} skill 공통 반환 키 누락: {key}")
-        for key in SKILL_EXTENSIONS[skill]:
-            if key not in text:
-                errors.append(f"{skill} skill 역할별 반환 키 누락: {key}")
-
     active_paths = list((ROOT / ".codex" / "agents").glob("*.toml"))
     active_paths += list((ROOT / ".agents" / "skills").glob("**/SKILL.md"))
     active_paths += list((ROOT / ".agents" / "skills" / "orchestrate" / "references").glob("*.md"))
@@ -390,9 +493,6 @@ def main() -> int:
     if orchestrate_lines >= 500:
         errors.append(f"orchestrate SKILL.md 500줄 미만 규칙 위반: {orchestrate_lines}")
 
-    tracker = tomllib.loads(
-        (agents_dir / "milestone-tracker.toml").read_text(encoding="utf-8")
-    )["developer_instructions"]
     tracker_skill = (
         ROOT / ".agents" / "skills" / "milestone-track" / "SKILL.md"
     ).read_text(encoding="utf-8")
@@ -403,16 +503,16 @@ def main() -> int:
         "plan-remediation": ("orchestrator",),
     }
     for phase, senders in transition_pairs.items():
-        for source_name, source_text in (("agent", tracker), ("skill", tracker_skill)):
+        for source_name, source_text in (("skill", tracker_skill),):
             matching_lines = [line for line in source_text.splitlines() if phase in line]
             if not matching_lines:
-                errors.append(f"milestone-tracker {source_name} 전이 누락: {phase}")
+                errors.append(f"milestone-track {source_name} 전이 누락: {phase}")
                 continue
             joined = "\n".join(matching_lines)
             for sender in senders:
                 if sender not in joined:
                     errors.append(
-                        f"milestone-tracker {source_name} phase/발신자 조합 누락: {phase} <- {sender}"
+                        f"milestone-track {source_name} phase/발신자 조합 누락: {phase} <- {sender}"
                     )
 
     scenarios = (ROOT / ".agents" / "skills" / "orchestrate" / "references" / "test-scenarios.md")
@@ -447,6 +547,7 @@ def main() -> int:
                     errors.append(f"시나리오 핵심 결과 누락: {scenario_id}: {needle}")
 
     verify_profile_application(errors)
+    verify_transition_validator(errors)
 
     if errors:
         for error in errors:

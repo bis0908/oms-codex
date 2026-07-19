@@ -1,13 +1,13 @@
 ---
 name: session-archive
-description: 세션 로그와 다음 세션 인계 문서를 작성하는 스킬. session-archivist 에이전트가 사용하며, 사용자가 히스토리 저장·인계 문서·다음 세션 보존을 요청하거나 마일스톤 완료 단계에서 persisted handoff가 필요할 때 실행한다.
+description: 오케스트레이터가 세션 로그와 다음 세션 인계 문서를 작성할 때 사용하는 스킬. 히스토리 저장·인계·다음 세션 보존 요청이나 실제 persisted handoff가 필요할 때 실행한다.
 ---
 
 ## 목적
 
-session-archivist는 세션의 사실 기록을 남긴다. 진행 상태의 단일 진실 공급원은 milestone-tracker가 소유한 `docs/progress/**`이며, 이 스킬은 그 파일을 읽기 전용으로만 참조한다.
+오케스트레이터는 이 스킬로 세션의 사실 기록을 남긴다. 진행 상태의 단일 진실 공급원은 `docs/progress/**`이며, 이 스킬은 그 파일을 읽기 전용으로만 참조한다.
 
-직접 재개 프롬프트 요청은 orchestrate가 처리한다. 이 경우 파일을 만들지 않고 붙여넣기용 텍스트만 출력하므로 session-archivist를 호출하지 않는다.
+직접 재개 프롬프트 요청은 orchestrate가 처리한다. 이 경우 파일을 만들지 않고 붙여넣기용 텍스트만 출력한다.
 
 ## 실행 모드
 
@@ -54,7 +54,7 @@ docs/handoffs/NN-kebab-case-handoff.md
 
 `NN`은 대상 디렉토리의 기존 두 자리 prefix 최댓값에 1을 더해 결정한다. 쓰기 직전에 디렉토리를 다시 조회하고 원자적 신규 생성으로 충돌을 확인한다. 같은 번호나 경로가 이미 생겼으면 덮어쓰지 말고 번호를 재계산해 재시도한다.
 
-`docs/progress/**`는 절대 수정하지 않는다. 마일스톤 완료 여부, 체크박스, 작업 로그 원장은 milestone-tracker 소유다.
+`docs/progress/**`는 절대 수정하지 않는다. 마일스톤 완료 여부, 체크박스, 작업 로그 원장은 `milestone-track` 경로에서만 수정한다.
 
 ## 작성 절차
 
@@ -113,35 +113,6 @@ docs/handoffs/NN-kebab-case-handoff.md
 
 민감정보를 안전하게 분리·마스킹할 수 없으면 파일을 만들지 않는다. 원문을 임시 문서에 먼저 쓴 뒤 지우는 방식도 금지한다. 이 경우 `결과: blocked`, `기록 결과: skipped`로 반환하고 필요한 비민감 요약을 요청한다.
 
-## 표준 반환
+## 반환 계약
 
-```markdown
-완료 항목:
-- <작성한 세션 로그 또는 인계 문서 경로>
-완료 task_id: <없음 또는 완료한 task_id 목록>
-
-미완료 항목:
-- <없음 또는 작성하지 못한 문서>
-
-확인 필요:
-- <없음 또는 누락된 사실/검증 결과>
-
-검증:
-- <민감정보 스캔·경로 충돌 확인 결과>
-
-미검증 항목:
-- <없음 또는 확인하지 못한 항목>
-
-다음 단계:
-- <오케스트레이터 최종 보고 | 사용자 확인>
-
-마일스톤: M{N | N/A}
-단계: session-archive
-에이전트: session-archivist
-기록 결과: <created | skipped | blocked>
-민감정보 점검: <pass | blocked>
-redaction: <없음 | 마스킹 항목>
-파일명 충돌 처리: <없음 | 재계산한 NN>
-request_id: <호출 request_id>
-결과: <completed | needs-input | blocked | failed>
-```
+공통 키는 `orchestrate/references/agent-contract.md`를 사용한다. 역할별로 `기록 결과`, `문서 경로`, `민감정보 점검`, `redaction`, `파일명 충돌 처리`를 추가하고 `에이전트: orchestrator`로 반환한다.

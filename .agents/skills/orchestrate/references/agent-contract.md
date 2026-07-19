@@ -82,7 +82,7 @@ completion 모드의 필수 미검증을 `completed`로 반환하지 않는다. 
 - task 상태 저장소와 checklist 매핑은 오케스트레이터만 수정한다.
 - 하위 agent는 입력으로 받은 task ID와 완료 task ID만 반환한다.
 - 오케스트레이터는 파일 실존, diff, 검증 증거를 확인한 뒤 completed로 전이한다.
-- milestone-tracker는 명시된 checklist ID만 갱신한다. 파일명으로 항목을 추측하지 않는다.
+- 오케스트레이터는 `scripts/validate-milestone-transition.py`를 통과한 명시적 checklist ID만 갱신한다. 파일명으로 항목을 추측하지 않는다.
 
 ## 산출물 명명
 

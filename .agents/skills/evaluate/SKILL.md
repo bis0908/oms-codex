@@ -240,14 +240,7 @@ approved = blocking_count == 0
 
 `◐ 의도적 제외`는 유효한 승인 출처가 있을 때만 blocking_count에서 제외한다. `? 확인 필요`가 하나라도 있으면 승인 불가이며 사용자 판단이 필요하면 `needs-input`, 실행 환경이 필요하면 `blocked`다.
 
-## 자주 발견되는 gap 패턴
-
-- 페이지는 있으나 데이터 연결 없음 (더미 데이터 상태로 방치)
-- 원본 스펙에서 유지하기로 한 부수 기록(조회수 카운터 등) 누락
-- 스펙에 명시된 보호 로직 미구현 (코드 존재해도 권한 조건 미연결)
-- 제거 결정했으나 레거시 코드 직역으로 불필요 기능 구현
-- 사용자 플로우 중간 단계 누락 (신청 → 가선정 사이 상태 처리 없음)
-- 탭 레이아웃만 있고 각 탭 내용 없음
+반복 gap 사례는 이 스킬에 누적하지 않는다. `docs/compound/evaluation/`이 존재하면 현재 작업의 load-when 조건과 일치하는 사례만 읽는다.
 ## 산출물 형식
 
 `_workspace/eval_{milestone}_{datetime}.md` 에 아래 구조로 작성한다. 오케스트레이터 봉투가 보고서 파일명을 별도 지정하면(예: 버그 경로 `eval_bugfix_{증상-슬러그}_{datetime}.md`) 기본 명명 대신 그 지정을 따른다(마일스톤 게이트의 파일 개수 기계 카운트 오염 방지).
@@ -298,40 +291,11 @@ approved = blocking_count == 0
 ## 권고 조치
 (담당 에이전트별 보완 요청 목록)
 
-## 표준 반환
-
-보고서: _workspace/eval_{milestone}_{datetime}.md
-평가 수: ✓ {a} / ◐ {b} / △ {c} / ✗ {d} / ⚠ {e} / ? {f}
-차단 항목 수: {c+d+e+f}
-
-완료 항목:
-- <충족된 주요 항목>
-완료 task_id: <검증 완료한 task_id 목록 또는 없음>
-
-미완료 항목:
-- <없음 또는 누락/부분/초과 항목>
-
-확인 필요:
-- <없음 또는 외부 의존으로 판정 불가한 항목>
-
-검증:
-- <정확한 upstream 보고서 경로·호출 ID·스모크 수행 증거>
-
-미검증 항목:
-- <없음 또는 ? 확인 필요 항목과 이유>
-
-다음 단계:
-- <milestone-tracker 완료 갱신 | 담당 에이전트 보완 | 사용자 확인>
-
-마일스톤: M{N}
-단계: phase-4-eval
-에이전트: evaluator
-검증 결과: <approved | 수정필요>
-호출 ID: <request_id와 동일>
-blocking 항목: <없음 | △·✗·⚠·? 항목 목록>
-request_id: <호출 request_id>
-결과: <completed | needs-input | blocked | failed>
 ```
+
+## 반환 계약
+
+공통 키는 `orchestrate/references/agent-contract.md`를 사용한다. 역할별로 `보고서`, `평가 수`, `차단 항목 수`, `검증 결과`, `호출 ID`, `blocking 항목`을 추가한다.
 
 audit 모드에서는 blocking 항목이 있어도 전체 항목 분류와 폴백 수행 기록이
 완성되면 `결과: completed`, `검증 결과: 수정필요`로 반환한다. completion

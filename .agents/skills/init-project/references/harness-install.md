@@ -1,104 +1,47 @@
-# 로컬 하네스 설치 참조
+# 프로젝트 로컬 하네스 설치
 
-이 문서는 `init-project`가 대상 프로젝트에 oms-codex 하네스를 설치·갱신할 때만 읽는다. 설치는 대상 프로젝트 루트에서만 수행한다.
+## 정본
 
-## 원본과 대상
+- source agents: `.codex/agents/*.toml`
+- model profiles: `agent-profiles.json`
+- topology profiles: `topology-profiles.json`
+- skills: `.agents/skills/*/SKILL.md`
 
-- 원본 agent: 현재 oms-codex 플러그인 번들의 `.codex/agents/*.toml`
-- 원본 skill: 현재 oms-codex 플러그인 번들의 `.agents/skills/<skill>/`
-- 대상 agent: 대상 프로젝트의 `.codex/agents/*.toml`
-- 대상 skill: 대상 프로젝트의 `.agents/skills/<skill>/`
-- 실행 프로필 정본: 현재 플러그인 번들의 `.agents/skills/init-project/references/agent-profiles.json`
+`lean`은 core 6개를, `full`은 source 9개를 설치한다. agent 이름 목록을 문서에 복제하지 않고 topology manifest에서 읽는다.
 
-현재 경로가 oms-codex 플러그인 저장소 또는 플러그인 캐시 내부이면 설치하지 않는다. 대상 프로젝트 경로를 요청한다.
+## 설치 절차
 
-## 필수 설치 대상
+1. 원본 루트와 대상 프로젝트 절대 경로를 검증한다. 대상 root와 설치 하위 경로에 symlink·junction·reparse point가 있으면 거부한다.
+2. topology를 선택한다. 명시값이 없으면 `lean`이다. Bash 설치기는 Python 3으로 topology JSON을 읽는다.
+3. topology의 `default_agents`가 source에 모두 존재하는지 확인한다.
+4. 대상 `.codex/agents/`, `.agents/skills/`의 충돌을 사전 확인한다.
+5. 기본은 복사, 공유 갱신이 명시됐을 때만 symlink를 사용한다.
+6. 기존 대상과 다르면 임의 덮어쓰지 않는다. Force가 명시되면 KST timestamp 백업 후 교체한다. 모든 항목을 먼저 staging하고 중간 실패 시 이번 실행의 교체를 역순 원복한다.
+7. 설치된 agent subset에 선택 model profile을 적용하고 `--check`로 확인한다.
+8. source-target 대응, skill frontmatter, parser·계약 검증을 수행한다.
 
-| 구분 | 논리 이름 | 원본 | 대상 |
-|---|---|---|---|
-| agent | page-builder | `.codex/agents/page-builder.toml` | `.codex/agents/page-builder.toml` |
-| agent | data-layer | `.codex/agents/data-layer.toml` | `.codex/agents/data-layer.toml` |
-| agent | evaluator | `.codex/agents/evaluator.toml` | `.codex/agents/evaluator.toml` |
-| agent | qa-guard | `.codex/agents/qa-guard.toml` | `.codex/agents/qa-guard.toml` |
-| agent | milestone-tracker | `.codex/agents/milestone-tracker.toml` | `.codex/agents/milestone-tracker.toml` |
-| agent | plan-auditor | `.codex/agents/plan-auditor.toml` | `.codex/agents/plan-auditor.toml` |
-| agent | compound-learner | `.codex/agents/compound-learner.toml` | `.codex/agents/compound-learner.toml` |
-| agent | compound-curator | `.codex/agents/compound-curator.toml` | `.codex/agents/compound-curator.toml` |
-| skill | init-project | `.agents/skills/init-project/` | `.agents/skills/init-project/` |
-| skill | orchestrate | `.agents/skills/orchestrate/` | `.agents/skills/orchestrate/` |
-| skill | evaluate | `.agents/skills/evaluate/` | `.agents/skills/evaluate/` |
-| skill | qa | `.agents/skills/qa/` | `.agents/skills/qa/` |
-| skill | milestone-track | `.agents/skills/milestone-track/` | `.agents/skills/milestone-track/` |
-| skill | plan-audit | `.agents/skills/plan-audit/` | `.agents/skills/plan-audit/` |
-| skill | compound | `.agents/skills/compound/` | `.agents/skills/compound/` |
+## direct skill mode
 
-## 선택 설치 대상
+bugfix, refactor, TDD, milestone tracking, session archive는 별도 custom agent를 설치하지 않는다. 오케스트레이터 또는 data-layer가 topology manifest의 `direct_skill_modes`에 따라 해당 skill을 직접 사용한다.
 
-아래 항목은 원본이 실제로 존재할 때만 설치한다.
+## 프로젝트 유형별 라우팅
 
-| 논리 이름 | 실제 agent 원본 | 관련 skill 원본 |
+| 유형 | 구현 | 조건부 검증 |
 |---|---|---|
-| design-reviewer | `.codex/agents/design-reviewer.toml` | `.agents/skills/design-review/` |
-| security-auditor | `.codex/agents/security-auditor.toml` | `.agents/skills/security-audit/` |
-| tdd-agent | `.codex/agents/tdd-agent.toml` | `.agents/skills/tdd/` |
-| bugfix-agent | `.codex/agents/bug-fixer.toml` | `.agents/skills/bugfix/` |
-| refactor-agent | `.codex/agents/refactor-specialist.toml` | `.agents/skills/refactor/` |
-| session-archivist | `.codex/agents/session-archivist.toml` | `.agents/skills/session-archive/` |
+| 프론트 | page-builder | design-reviewer, qa-guard, evaluator |
+| 백엔드/API | data-layer + tdd | qa-guard, security-auditor, evaluator |
+| 풀스택 | data-layer 계약 후 page-builder | full gate |
+| 문서/계획 | 오케스트레이터, plan-auditor는 선택 설치 | direct 또는 evaluator |
 
-`bugfix-agent`와 `refactor-agent`는 라우팅 논리 이름이다. 실제 번들 파일명은 각각 `bug-fixer.toml`, `refactor-specialist.toml`이다. 실제 원본 파일명이 없으면 새 이름으로 파일을 만들지 말고 `원본 부재`로 보고한다.
+일반 문서·스크립트·인프라를 data-layer에 임의 배정하지 않는다. 선택 agent가 설치되지 않았으면 원본을 창작하지 말고 오케스트레이터 direct skill 경로 또는 `원본 부재`를 보고한다.
 
-## 설치 상태 판정
+## 검증
 
-각 항목은 아래 상태 중 하나로 기록한다.
-
-- `설치됨`: 대상이 없어서 원본을 복사했거나, 대상이 원본과 동일하다.
-- `갱신됨`: 대상이 oms-codex 관리본임이 명확하고 사용자 변경 가능성이 없어 원본 변경을 반영했다.
-- `원본 부재`: 플러그인 번들에 원본 파일이나 디렉터리가 없다.
-- `확인 필요`: 대상에 프로젝트별 변경 가능성이 있어 자동 병합하지 않았다.
-- `충돌 보류`: 대상과 원본이 다르고 안전한 병합 기준이 없다.
-
-기존 대상 파일이나 디렉터리가 있으면 먼저 읽고 비교한다. 내용이 다르면 임의 overwrite하지 않는다. TOML과 skill 디렉터리는 구조가 민감하므로 자동 병합은 관리 흔적과 무변경 근거가 명확할 때만 허용한다.
-
-단, target agent TOML이 source와 `model`, `model_reasoning_effort`만 다르고 나머지 내용이 동일하면 이전 실행 프로필이 적용된 관리본으로 본다. 이 경우에는 파일 전체를 복사하지 않고 `apply-agent-profile.py`로 두 필드만 변경할 수 있다. 두 필드 외 차이가 하나라도 있으면 사용자 변경 가능성이 있으므로 `확인 필요` 또는 `충돌 보류`로 처리한다.
-
-## 프로젝트별 최적화
-
-최적화는 기본적으로 agent TOML을 수정하지 않고 `AGENTS.md`의 `## oms-codex 운영` 섹션에 라우팅 정책으로 기록한다. 예외는 사용자가 명시적으로 선택한 실행 프로필이며, 이 경우 `apply-agent-profile.py`가 model·effort 두 필드만 변경한다.
-
-| 프로젝트 유형 | 우선 라우팅 | 게이트 후보 |
-|---|---|---|
-| 신규 개발 | 판정된 주 영역에 따라 `page-builder` 또는 `data-layer` 우선 | `evaluator`, `qa-guard` |
-| 레거시 포팅 | `evaluator`가 원본-스펙-구현 3자 대조를 우선 | `qa-guard`, 필요 시 `security-auditor` |
-| 프론트 중심 | `page-builder` 우선 | `design-reviewer`, `qa-guard` |
-| 백엔드/API 중심 | `data-layer` 우선 | `tdd-agent`, `security-auditor`, `qa-guard` |
-| 풀스택 | `page-builder`와 `data-layer` 병행 | `evaluator`, `qa-guard`, `security-auditor`, `design-reviewer` |
-| 문서/계획 중심 | 계획 감사는 `plan-auditor`, 상태 기록은 `milestone-tracker`, 문서 구현은 프로젝트 override 또는 오케스트레이터 | `qa-guard`, `evaluator` |
-
-게이트 후보는 실제 설치된 항목만 활성으로 기록한다. 원본 부재나 충돌 보류 항목은 후보에서 제외하거나 `확인 필요`로 남긴다.
-
-## AGENTS.md 기록 규칙
-
-`AGENTS.md`에는 실제 확인한 파일과 경로만 기록한다. 상태는 `설치됨`, `갱신됨`, `원본 부재`, `확인 필요`, `충돌 보류`를 구분한다.
-
-기록 필수 항목:
-
-- 필수 agent별 설치 상태
-- 실행 프로필 ID, 선택 근거, 대상 agent TOML 일치 검증 결과
-- 필수 skill별 설치 상태
-- 선택 agent/skill 설치 또는 제외 사유
-- 프로젝트 유형 판정과 근거 경로
-- 적용된 에이전트 라우팅
-- 프로젝트 override 존재 여부
-- 일반 코드·문서·인프라 구현 override 또는 오케스트레이터 직접 수행 여부
-- 보안 고위험 path/keyword manifest와 시각 전용 path manifest
-- 커밋 정책(`auto`, `ask`, `disabled`)과 `commit-local` capability 상태
-- 충돌/확인 필요 목록
-
-## 금지
-
-- 원본이 없는 agent, skill, source를 창작하지 않는다.
-- 사용자 변경 가능성이 있는 기존 `.codex/agents/` 또는 `.agents/skills/` 파일을 임의 overwrite하지 않는다.
-- 마일스톤 구현을 시작하지 않는다.
-- `docs/progress/milestone-status.md`를 선생성하지 않는다.
-- production dependency를 추가하지 않는다.
-- lockfile이나 package manager 설정을 변경하지 않는다.
+- PowerShell Parser와 가능한 환경의 `bash -n`
+- 기본 설치 agent 집합 == lean `default_agents`
+- full 설치 agent 집합 == full `default_agents`
+- 설치 subset의 model/effort profile 일치
+- 충돌 시 비파괴 종료, Force 시 백업 존재
+- child link 범위 이탈과 source-target 중첩 symlink 거부
+- staging 실패와 교체 중간 실패 시 부분 설치 없음
+- 사용자 홈·전역 config·marketplace 미변경
